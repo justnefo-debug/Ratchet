@@ -31,14 +31,15 @@ export async function checkBackendHealth(): Promise<boolean> {
 export async function performRedaction(
   text: string,
   customRules: CustomRule[] = [],
-  enabledTypes?: Record<EntityType, boolean>
+  enabledTypes?: Record<EntityType, boolean>,
+  sessionId?: string
 ): Promise<{
   safeText: string;
   entities: DetectedEntity[];
   isLocal: boolean;
   sessionId: string;
 }> {
-  const sessionId = `session-${Date.now()}`;
+  const currentSessionId = sessionId || `session-${Date.now()}`;
 
   // Try backend first
   try {
@@ -48,7 +49,7 @@ export async function performRedaction(
     const res = await fetch(`${API_BASE_URL}/redact`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, sessionId }),
+      body: JSON.stringify({ text, session_id: currentSessionId }),
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
@@ -119,4 +120,30 @@ export async function performRestoration(
     ...result,
     isLocal: true,
   };
+}
+
+/**
+ * Upload a document for backend true-redaction processing
+ */
+export async function redactDocument(file: File, sessionId: string): Promise<{
+  blob: Blob;
+  filename: string;
+}> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('session_id', sessionId);
+
+  const res = await fetch(`${API_BASE_URL}/document/redact`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to redact document');
+  }
+
+  const blob = await res.blob();
+  const filename = `safe_${file.name}`;
+  return { blob, filename };
 }

@@ -54,12 +54,18 @@ export const RestoreTab: React.FC<RestoreTabProps> = ({
 
   // Recalculate restoration whenever input or active session changes
   useEffect(() => {
-    if (activeSession && aiResponseText) {
-      const res = restoreTextFromSession(aiResponseText, activeSession);
-      setRestoration(res);
-    } else {
-      setRestoration(null);
-    }
+    let active = true;
+    const compute = async () => {
+      if (activeSession && aiResponseText) {
+        const { performRestoration } = await import('../engine/api');
+        const res = await performRestoration(aiResponseText, activeSession);
+        if (active) setRestoration(res as unknown as RestorationResult);
+      } else {
+        if (active) setRestoration(null);
+      }
+    };
+    compute();
+    return () => { active = false; };
   }, [aiResponseText, activeSession]);
 
   const handleCopy = () => {

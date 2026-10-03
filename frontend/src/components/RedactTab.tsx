@@ -9,6 +9,7 @@ import {
   ArrowRightCircle,
   Eye,
   Edit3,
+  UploadCloud,
 } from 'lucide-react';
 import type { DetectedEntity } from '../types';
 import { EntityHighlight } from './EntityHighlight';
@@ -25,6 +26,8 @@ interface RedactTabProps {
   isCopied: boolean;
   onSendToRestore: () => void;
   onLoadPreset: (presetKey: string) => void;
+  onFileUpload: (file: File) => void;
+  isUploading: boolean;
 }
 
 export const RedactTab: React.FC<RedactTabProps> = ({
@@ -38,9 +41,12 @@ export const RedactTab: React.FC<RedactTabProps> = ({
   isCopied,
   onSendToRestore,
   onLoadPreset,
+  onFileUpload,
+  isUploading,
 }) => {
   const [leftViewMode, setLeftViewMode] = useState<'edit' | 'highlight'>('highlight');
   const [rightViewMode, setRightViewMode] = useState<'badges' | 'raw'>('badges');
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const activeHiddenCount = entities.filter((e) => e.enabled).length;
 
@@ -87,6 +93,31 @@ export const RedactTab: React.FC<RedactTabProps> = ({
           title="Clear editor"
         >
           <RotateCcw size={12} /> Clear
+        </button>
+
+        <div style={{ flexGrow: 1 }} />
+        
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          style={{ display: 'none' }} 
+          accept=".pdf,.docx,.xlsx,.xls"
+          onChange={(e) => {
+            if (e.target.files && e.target.files[0]) {
+              onFileUpload(e.target.files[0]);
+            }
+            e.target.value = '';
+          }}
+        />
+        <button
+          className="preset-chip secondary"
+          onClick={() => fileInputRef.current?.click()}
+          title="Upload a PDF, Word, or Excel document to redact"
+          disabled={isUploading}
+          style={{ border: '1px solid var(--accent-red)', color: 'var(--accent-red)' }}
+        >
+          <UploadCloud size={14} /> 
+          {isUploading ? 'Uploading...' : 'Upload Document'}
         </button>
       </div>
 

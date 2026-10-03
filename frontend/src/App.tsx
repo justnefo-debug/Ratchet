@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type {
   ActiveTab,
   ThemeMode,
@@ -17,7 +17,7 @@ import { ChangelogTab } from './components/ChangelogTab';
 import { SettingsModal } from './components/SettingsModal';
 import { ToastContainer, type ToastMessage } from './components/Toast';
 import { detectEntitiesInText, buildRedactedText } from './engine/detector';
-import { checkBackendHealth } from './engine/api';
+import { checkBackendHealth, performRedaction } from './engine/api';
 import './App.css';
 
 const DEFAULT_SAMPLE_TEXT = `Hi, my name is M.Nafees and I work at Tech Solutions.
@@ -117,7 +117,11 @@ export const App: React.FC = () => {
     const saved = localStorage.getItem('ratchet_metrics');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.history && Array.isArray(parsed.history)) {
+          parsed.history = parsed.history.filter((h: any) => h && h.id && h.types);
+        }
+        return parsed;
       } catch {
         // fallback
       }
@@ -138,6 +142,38 @@ export const App: React.FC = () => {
       history: [],
     };
   });
+
+  const updateMetrics = useCallback((session: SessionRecord) => {
+    setMetrics((prev: SystemMetrics) => {
+      const newMetrics = { ...prev };
+      newMetrics.sessionsCount += 1;
+      newMetrics.totalDetected += session.entities.length;
+      newMetrics.totalRedacted += session.entities.filter((e: DetectedEntity) => e.enabled).length;
+      
+      newMetrics.entityTypeCounts = { ...newMetrics.entityTypeCounts };
+      session.entities.forEach((e: DetectedEntity) => {
+        if (e.enabled) {
+          newMetrics.entityTypeCounts[e.type] = (newMetrics.entityTypeCounts[e.type] || 0) + 1;
+        }
+      });
+      
+      const historyCopy = [...newMetrics.history];
+      // clear any malformed entries (from the bug)
+      const cleanHistory = historyCopy.filter(h => h.id && h.types);
+      cleanHistory.unshift({
+        id: session.id,
+        timestamp: session.timestamp,
+        entityCount: session.entities.filter((e: DetectedEntity) => e.enabled).length,
+        types: Array.from(new Set(session.entities.filter((e: DetectedEntity) => e.enabled).map((e: DetectedEntity) => e.type))),
+        safeSnippet: session.safeText || "Document File",
+      });
+      if (cleanHistory.length > 50) cleanHistory.pop();
+      newMetrics.history = cleanHistory;
+      
+      localStorage.setItem('ratchet_metrics', JSON.stringify(newMetrics));
+      return newMetrics;
+    });
+  }, []);
 
   // Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -180,13 +216,22 @@ export const App: React.FC = () => {
     localStorage.setItem('ratchet_custom_rules', JSON.stringify(customRules));
   }, [customRules]);
 
+  const activeBackendSessionRef = useRef<string>(`SES-${Date.now().toString(36).toUpperCase()}`);
+
   // Core detection on input or rule changes
   const runDetection = useCallback(
-    (textToScan: string) => {
-      const detected = detectEntitiesInText(textToScan, customRules, enabledTypes);
-      setEntities(detected);
-      const safe = buildRedactedText(textToScan, detected);
-      setSafeText(safe);
+    async (textToScan: string) => {
+      if (!textToScan.trim()) {
+        setEntities([]);
+        setSafeText('');
+        return;
+      }
+      const result = await performRedaction(textToScan, customRules, enabledTypes, activeBackendSessionRef.current);
+      if (result.sessionId) {
+        activeBackendSessionRef.current = result.sessionId;
+      }
+      setEntities(result.entities);
+      setSafeText(result.safeText);
     },
     [customRules, enabledTypes]
   );
@@ -279,21 +324,67 @@ export const App: React.FC = () => {
     }
   };
 
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  
+  const handleFileUpload = async (file: File) => {
+    setIsUploading(true);
+    addToast('Uploading and redacting document...', 'info');
+    try {
+      const { redactDocument } = await import('./engine/api');
+      const { blob, filename } = await redactDocument(file, activeBackendSessionRef.current);
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      
+      // Save the document session to the vault
+      const docSession: SessionRecord = {
+        id: activeBackendSessionRef.current,
+        timestamp: Date.now(),
+        originalText: `[Document Upload: ${file.name}]`,
+        safeText: 'Document redacted safely and downloaded.',
+        entities: [],
+        name: `File: ${file.name}`,
+      };
+      updateMetrics(docSession);
+      const updatedSessions = [docSession, ...sessions.slice(0, 15)];
+      setSessions(updatedSessions);
+      setCurrentSession(docSession);
+      localStorage.setItem('ratchet_sessions', JSON.stringify(updatedSessions));
+      activeBackendSessionRef.current = `SES-${Date.now().toString(36).toUpperCase()}`;
+
+      addToast('Document redacted & session securely vaulted!', 'success');
+    } catch (error: any) {
+      addToast(error.message || 'Error redacting document', 'warning');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   // Send current redacted session to Restore Tab
   const handleSendToRestore = () => {
     const newSession: SessionRecord = {
-      id: `SES-${Date.now().toString(36).toUpperCase()}`,
+      id: activeBackendSessionRef.current,
       timestamp: Date.now(),
       originalText: inputText,
       safeText,
       entities: [...entities],
       name: `Prompt (${entities.length} items)`,
     };
+    updateMetrics(newSession);
 
     const updatedSessions = [newSession, ...sessions.slice(0, 15)];
     setSessions(updatedSessions);
     setCurrentSession(newSession);
     localStorage.setItem('ratchet_sessions', JSON.stringify(updatedSessions));
+
+    // Reset for next redaction
+    activeBackendSessionRef.current = `SES-${Date.now().toString(36).toUpperCase()}`;
 
     setActiveTab('restore');
     addToast('Vault session created & sent to Restore Tab!', 'success');
@@ -348,6 +439,8 @@ export const App: React.FC = () => {
               isCopied={isCopied}
               onSendToRestore={handleSendToRestore}
               onLoadPreset={handleLoadPreset}
+              onFileUpload={handleFileUpload}
+              isUploading={isUploading}
             />
           )}
 

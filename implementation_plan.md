@@ -1,6 +1,34 @@
-# 🛡️ Ratchet — 6-Day Full Production Build Plan
+# 🛡️ Ratchet — 9-Week Full Production Build Plan
 
 > **Goal**: A complete, production-grade privacy shield web app + Chrome extension — with the exact UI from the reference designs.
+
+---
+
+## Project Overview / Tech Stack
+**Tech Stack**: React, Vite, TypeScript, Python, Flask, spaCy. 
+**Added for Document Support**: PyMuPDF, Tesseract (pytesseract), python-docx, openpyxl, python-pptx, pandas, striprtf, odfpy.
+
+## Key Technical Decisions
+| Decision | Rationale |
+|---|---|
+| PDF redaction method | true redaction (PyMuPDF), not overlay boxes |
+| Unsupported or unreadable files | block by default (fail safe) |
+
+## Success Metrics
+| Metric | Target |
+|---|---|
+| Document leak rate | 0 originals remaining in cleaned output |
+| 20-page text document scan time | < 5 seconds |
+
+## Risks & Mitigations
+| Risk | Severity | Mitigation |
+|---|---|---|
+| Fake redaction (black box over copyable text) | High | True redaction plus leak test on every output |
+| Hidden data in metadata, comments, hidden sheets | High | Dedicated metadata cleaner plus leak test |
+| OCR mistakes miss a name | Medium | Mark OCR text low-confidence and default to redact |
+| Rebuilt file looks broken | Medium | Text-only fallback (Option B) |
+| Large files freeze the browser | Medium | Background worker and chunking |
+| Unsupported file silently sent through | High | Block by default and warn the user |
 
 ---
 
@@ -131,6 +159,28 @@ graph TB
     N --> U
 ```
 
+### Document Pipeline Architecture
+
+```mermaid
+graph TB
+    FileUpload[File Upload] --> TypeChecker[Type Checker]
+    TypeChecker --> PDFHandler[PDF Handler]
+    TypeChecker --> WordHandler[Word Handler]
+    TypeChecker --> ExcelHandler[Excel Handler]
+    TypeChecker --> OtherHandlers[Other Handlers]
+    PDFHandler --> OCR[OCR if scanned]
+    OCR --> TextExtraction[Text Extraction]
+    PDFHandler --> TextExtraction
+    WordHandler --> TextExtraction
+    ExcelHandler --> TextExtraction
+    OtherHandlers --> TextExtraction
+    TextExtraction --> Detectors[Existing 3 Detectors]
+    Detectors --> RedactionEngine[Redaction Engine]
+    RedactionEngine --> Rebuild[Rebuild Cleaned File + Strip Metadata]
+    RedactionEngine --> MappingStore[Mapping Store]
+    Rebuild --> CleanedFile[Cleaned File Sent to AI]
+```
+
 ---
 
 ## 📅 Day 1 (Oct 4) — Complete Core Backend Engine
@@ -142,6 +192,7 @@ graph TB
 - [ ] **Repo & project setup** — monorepo structure:
   ```
   ratchet/
+  ├── packages/core/documents/   # File handlers (pdf, docx, xlsx, etc.)
   ├── backend/
   │   ├── detectors/
   │   │   ├── __init__.py
@@ -376,13 +427,99 @@ Custom rules editable in UI, confidence fallbacks working, learning loop trackin
 
 ---
 
-## 📅 Day 5 (Oct 8) — Security, Performance, Comprehensive Testing
+## 📅 Phase 4: Document Support (Week 6-7)
+
+> [!IMPORTANT]
+> Without this phase, uploading a file bypasses Ratchet completely. All file handling happens locally, just like text.
+
+Every file type gets a small "reader" that extracts text and hands it to the same three detectors (regex, NER, custom rules). After redaction, Ratchet produces either a cleaned copy of the file or cleaned text. Flow: Upload file -> check file type -> reader extracts text -> existing detectors -> redact -> cleaned file sent to AI -> reply restored.
+
+### 4.1 Upload Interception
+- [ ] Catch files chosen via the attach button (input type=file), drag-and-drop, and clipboard paste
+- [ ] Hold the file until scanning finishes, then pass on the cleaned version
+- [ ] Progress bar for large files
+- [ ] Block unsupported file types with a warning ("Ratchet can't protect this file. Send anyway?")
+
+### 4.2 File Type Handlers
+*(code lives in packages/core/documents/; pattern: extract text -> detect -> redact -> rebuild)*
+
+| File type | Extensions | Tool | What needs care |
+|---|---|---|---|
+| PDF (text) | .pdf | PyMuPDF / pdfplumber | Must truly remove text, not just draw black boxes |
+| PDF (scanned) | .pdf | Tesseract OCR | Text is an image; OCR first; mistakes possible |
+| Word | .docx | python-docx | A name can be split across formatting "runs" |
+| Excel | .xlsx, .xls | openpyxl | Cells, hidden sheets, formulas, comments |
+| CSV / TSV | .csv, .tsv | pandas / csv | Column-aware detection (column named "Email") |
+| PowerPoint | .pptx | python-pptx | Slide text, speaker notes, tables |
+| Plain text / Markdown | .txt, .md | built-in | Easiest case |
+| JSON / XML / YAML | .json, .xml, .yaml | built-in parsers | Redact values, keep structure valid |
+| Rich text / OpenDocument | .rtf, .odt, .ods | striprtf / odfpy | Convert, then handle like others |
+| Images | .png, .jpg | Tesseract OCR | Warn only; detection unreliable |
+| Code files | .py, .js, .env, etc. | built-in | Focus on API keys and passwords |
+
+### 4.3 Handler Details
+- [ ] PDF: detect text vs scanned (almost no text on a page = scan); use TRUE redaction (PyMuPDF apply_redactions) that deletes the underlying text, because black rectangles over copyable text are not real redaction; run OCR on scanned pages and place redaction boxes at OCR word positions; handle multi-column layouts and tables
+- [ ] Word: merge split text runs before detection (e.g. "Jo"+"hn"+" Doe"); scan headers, footers, footnotes, text boxes, tables; remove comments and tracked changes
+- [ ] Excel: scan all sheets including hidden ones; scan values, formulas, comments, named ranges; use column headers as hints (a column titled "SSN" is all sensitive); keep formulas working where possible; process large sheets in chunks
+- [ ] CSV/JSON/XML: keep structure valid; redact by field name and by value
+- [ ] PowerPoint: scan slide text, tables, notes, alt text
+
+### 4.4 Metadata Cleaning
+- [ ] Remove author, company, last-edited-by names
+- [ ] Remove creation/edit dates, revision history, printer/computer names
+- [ ] Remove embedded thumbnails and file paths
+- [ ] Remove comments and tracked changes
+
+### 4.5 Output Strategy (user chooses, with a sensible default per file type)
+- [ ] Option A: cleaned copy (rebuilt file with placeholders; best for layout)
+- [ ] Option B: cleaned text pasted into chat (more reliable, loses formatting)
+- [ ] Option C: preview and approve (reuses the Phase 3 review screen)
+
+### 4.6 Restoring Document Answers
+- [ ] Store mappings under a documentId linked to the session
+- [ ] Restore placeholders in the AI reply as usual
+- [ ] If the AI produces a new file (summary, edited spreadsheet), intercept the download and restore placeholders inside it
+- [ ] Use consistent placeholders across the whole document (John Doe is always [PERSON_1], even on page 50)
+
+### 4.7 Safety Limits and Warnings
+- [ ] Password-protected files: ask for the password locally or warn they cannot be scanned
+- [ ] Macro files (.xlsm, .docm): warn or block
+- [ ] Images inside documents (ID photos, screenshots): warn, or OCR with a "low confidence" label
+- [ ] Handwriting: warn that it is unsupported
+- [ ] Configurable file size limit (e.g. 25 MB) with a "scanning may take a while" notice
+- [ ] Encrypted or corrupted files: fail safely by blocking the upload
+- [ ] Always show a summary, e.g. "Found 14 items in 3 pages. 1 image could not be scanned."
+
+### 4.8 Performance
+- [ ] Run in a background worker so the browser does not freeze
+- [ ] Chunk large files, scan each chunk, combine results
+- [ ] Cache results so re-uploading the same file is instant
+- [ ] Target: under 5 seconds for a 20-page text document
+
+### 4.9 Testing
+- [ ] Create sample files for each format with known private data planted inside
+- [ ] LEAK TEST: after redaction, extract all text from the output and confirm no original values remain, including metadata and hidden sheets
+- [ ] Test odd files: split runs, merged cells, rotated pages, huge files
+- [ ] Confirm cleaned files still open in Word, Excel, and Acrobat
+
+### Suggested Build Order
+1. TXT, CSV, JSON
+2. DOCX
+3. XLSX
+4. PDF (text) with true redaction
+5. PPTX
+6. PDF (scanned) and images with OCR
+
+---
+
+## 📅 Phase 5 (Week 8) — Security, Performance & Polish
 
 > **12–14 hours | Hardened, fast, thoroughly tested**
 
 ### Morning (4h) — Security
 
 - [ ] Verify AES-256 encrypted mapping store
+- [ ] Document handling must also pass the zero-network-call and memory-clearing requirements
 - [ ] Audit: zero PII in logs, storage, messages
 - [ ] Input sanitization, XSS prevention in restored text
 - [ ] Regex ReDoS testing + timeouts
@@ -404,12 +541,12 @@ Custom rules editable in UI, confidence fallbacks working, learning loop trackin
 - [ ] Edge case scenarios: real emails, code with secrets, financial reports
 - [ ] Cross-browser: Chrome (primary), Edge
 
-#### ✅ Day 5 Done When
+#### ✅ Phase 5 Done When
 Zero PII leaks, sub-100ms detection, all tests green, smooth on all platforms.
 
 ---
 
-## 📅 Day 6 (Oct 9) — Documentation, Demo, Ship
+## 📅 Phase 6 (Week 9) — Demo & Deployment
 
 > **10–12 hours | Production-ready delivery**
 
@@ -464,4 +601,21 @@ Zero PII leaks, sub-100ms detection, all tests green, smooth on all platforms.
 
 ---
 
-## 🚀 Ready to Build — Day 1 Starts Now!
+## Timeline
+- **Phase 1**: Weeks 1-2
+- **Phase 2**: Weeks 3-4
+- **Phase 3**: Week 5
+- **Phase 4 (Document Support)**: Weeks 6-7
+- **Phase 5 (Security, Performance, Polish)**: Week 8
+- **Phase 6 (Demo & Deployment)**: Week 9
+
+## Immediate Next Steps
+1. Initialize the monorepo and React frontend.
+2. Build the core backend detection pipeline.
+3. Integrate the UI and connect to the API.
+> [!TIP]
+> Document support begins after Phase 3.
+
+---
+
+## 🚀 Ready to Build — Phase 1 Starts Now!

@@ -17,3 +17,10 @@ yarn-error.log*
 .env.local
 .DS_Store
 Thumbs.db
+
+# Python
+backend/venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
