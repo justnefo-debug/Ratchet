@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Ratchet Privacy Shield",
+  "version": "1.0.0",
+  "description": "Automatically detect, redact, and restore sensitive data in your AI workflows.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://claude.ai/*",
+    "https://gemini.google.com/*",
+    "http://localhost:5000/*",
+    "http://127.0.0.1:5000/*"
+  ],
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "Ratchet"
+  },
+  "options_ui": {
+    "page": "src/options/options.html",
+    "open_in_tab": true
+  },
+  "background": {
+    "service_worker": "assets/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*"
+      ],
+      "js": ["assets/content.js"],
+      "run_at": "document_end"
+    }
+  ]
+}

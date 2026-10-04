@@ -14,6 +14,14 @@ class WordHandler(DocumentHandler):
             for row in table.rows:
                 for cell in row.cells:
                     full_text.append(cell.text)
+                    
+        # Extract headers and footers
+        for section in doc.sections:
+            for header_para in section.header.paragraphs:
+                full_text.append(header_para.text)
+            for footer_para in section.footer.paragraphs:
+                full_text.append(footer_para.text)
+                
         return "\n".join(full_text)
         
     def rebuild(self, file_path: str, mapping: Dict[str, str], entities: List[Entity]) -> str:
@@ -22,13 +30,13 @@ class WordHandler(DocumentHandler):
         def replace_in_text(text: str) -> str:
             new_text = text
             for placeholder, original in mapping.items():
-                new_text = new_text.replace(original, placeholder)
+                if original in new_text:
+                    new_text = new_text.replace(original, placeholder)
             return new_text
             
         # Replace in paragraphs
         for para in doc.paragraphs:
             if any(orig in para.text for orig in mapping.values()):
-                # Replacing paragraph.text clears runs but preserves paragraph-level formatting
                 para.text = replace_in_text(para.text)
                 
         # Replace in tables
@@ -38,6 +46,15 @@ class WordHandler(DocumentHandler):
                     for para in cell.paragraphs:
                         if any(orig in para.text for orig in mapping.values()):
                             para.text = replace_in_text(para.text)
+                            
+        # Replace in headers and footers
+        for section in doc.sections:
+            for para in section.header.paragraphs:
+                if any(orig in para.text for orig in mapping.values()):
+                    para.text = replace_in_text(para.text)
+            for para in section.footer.paragraphs:
+                if any(orig in para.text for orig in mapping.values()):
+                    para.text = replace_in_text(para.text)
                             
         safe_path = file_path.replace(".docx", "_safe.docx")
         doc.save(safe_path)

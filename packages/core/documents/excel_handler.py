@@ -9,10 +9,13 @@ class ExcelHandler(DocumentHandler):
         wb = openpyxl.load_workbook(file_path, data_only=True)
         full_text = []
         for sheet in wb.worksheets:
+            # Note: iter_rows traverses all rows, even in hidden sheets
             for row in sheet.iter_rows():
                 for cell in row:
                     if cell.value:
                         full_text.append(str(cell.value))
+                    if cell.comment and cell.comment.text:
+                        full_text.append(str(cell.comment.text))
         wb.close()
         return "\n".join(full_text)
         
@@ -22,7 +25,8 @@ class ExcelHandler(DocumentHandler):
         def replace_in_text(text: str) -> str:
             new_text = str(text)
             for placeholder, original in mapping.items():
-                new_text = new_text.replace(original, placeholder)
+                if original in new_text:
+                    new_text = new_text.replace(original, placeholder)
             return new_text
             
         for sheet in wb.worksheets:
@@ -32,6 +36,10 @@ class ExcelHandler(DocumentHandler):
                         val_str = str(cell.value)
                         if any(orig in val_str for orig in mapping.values()):
                             cell.value = replace_in_text(val_str)
+                    if cell.comment and cell.comment.text:
+                        com_str = str(cell.comment.text)
+                        if any(orig in com_str for orig in mapping.values()):
+                            cell.comment.text = replace_in_text(com_str)
                             
         safe_path = file_path.replace(".xlsx", "_safe.xlsx")
         wb.save(safe_path)

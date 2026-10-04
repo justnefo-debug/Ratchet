@@ -1,0 +1,31 @@
+{
+    "rules": [
+        {
+            "name": "Project Phoenix",
+            "type": "keyword",
+            "values": ["Project Phoenix", "Operation Titan"],
+            "category": "PROJECT_CODENAME",
+            "confidence": 1.0,
+            "priority": 100,
+            "enabled": true
+        },
+        {
+            "name": "Internal Corp Domain",
+            "type": "regex",
+            "pattern": "\\b\\w+@internal\\.corp\\.com\\b",
+            "category": "INTERNAL_EMAIL",
+            "confidence": 0.99,
+            "priority": 50,
+            "enabled": true
+        },
+        {
+            "name": "Internal Server Hosts",
+            "type": "glob",
+            "pattern": "srv-*\\.internal",
+            "category": "INTERNAL_HOST",
+            "confidence": 0.95,
+            "priority": 40,
+            "enabled": true
+        }
+    ]
+}

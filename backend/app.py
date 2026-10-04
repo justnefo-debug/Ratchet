@@ -107,5 +107,38 @@ def document_redact():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/rules", methods=["GET", "POST"])
+def rules():
+    if request.method == "GET":
+        return jsonify({"rules": engine.custom_rules_detector.list_rules()})
+    else:
+        data = request.json
+        action = data.get("action")
+        if action == "add":
+            engine.custom_rules_detector.add_rule(data.get("rule"))
+            return jsonify({"status": "success", "message": "Rule added"})
+        elif action == "delete":
+            engine.custom_rules_detector.delete_rule(data.get("rule_name"))
+            return jsonify({"status": "success", "message": "Rule deleted"})
+        return jsonify({"error": "Invalid action"}), 400
+
+@app.route("/api/sessions", methods=["GET"])
+def list_sessions():
+    return jsonify({"sessions": engine.store.list_sessions()})
+
+@app.route("/api/sessions/<session_id>", methods=["DELETE"])
+def delete_session(session_id):
+    engine.store.delete_session(session_id)
+    return jsonify({"status": "success", "message": f"Session {session_id} deleted"})
+
+@app.route("/api/settings", methods=["POST"])
+def update_settings():
+    from config.settings import Settings
+    data = request.json
+    if "SENSITIVITY" in data:
+        Settings.ACTIVE_SENSITIVITY = data["SENSITIVITY"]
+    # Handle other settings updates here
+    return jsonify({"status": "success", "message": "Settings updated"})
+
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)

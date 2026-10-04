@@ -75,7 +75,7 @@ export async function performRedaction(
     safeText,
     entities,
     isLocal: true,
-    sessionId,
+    sessionId: sessionId || "local-session",
   };
 }
 

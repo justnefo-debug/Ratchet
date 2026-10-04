@@ -16,7 +16,7 @@ import { MetricsTab } from './components/MetricsTab';
 import { ChangelogTab } from './components/ChangelogTab';
 import { SettingsModal } from './components/SettingsModal';
 import { ToastContainer, type ToastMessage } from './components/Toast';
-import { detectEntitiesInText, buildRedactedText } from './engine/detector';
+import { buildRedactedText } from './engine/detector';
 import { checkBackendHealth, performRedaction } from './engine/api';
 import './App.css';
 

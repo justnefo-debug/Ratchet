@@ -67,6 +67,52 @@ Check the `Context/manual_guide.md` for a comprehensive step-by-step user manual
 
 ## 🛠️ Architecture
 
+```mermaid
+graph TD
+    A[Browser / Extension] -->|Text / Doc| B(Flask API)
+    B --> C{Pipeline Engine}
+    C --> D[Regex Detector]
+    C --> E[NER Detector Spacy]
+    C --> F[Custom Rules]
+    C --> G[Mapping Store AES-256]
+    
+    A -->|Restore Text| B
+    B --> H[Restorer]
+    G --> H
+    H --> A
+```
+
 - **Backend**: Python, Flask, Spacy (NER), PyMuPDF (PDF handler), OpenPyXL (Excel handler), Python-docx (Word handler).
 - **Frontend**: React, TypeScript, Vite, Lucide React (Icons).
 - **Storage**: In-memory Python mappings for active sessions, synchronized via browser `localStorage`.
+
+---
+
+## 📡 API Reference
+
+### `POST /api/detect`
+Detects sensitive entities in text.
+- **Body**: `{"text": "My email is test@example.com"}`
+- **Response**: List of detected entities with confidence scores.
+
+### `POST /api/redact`
+Redacts text and securely stores the mapping.
+- **Body**: `{"text": "My email is test@example.com", "session_id": "optional-uuid"}`
+- **Response**: `{"redacted_text": "My email is [EMAIL_0]", "session_id": "...", "entities": [...]}`
+
+### `POST /api/restore`
+Restores original text from placeholders using the session mapping.
+- **Body**: `{"text": "Here is the response for [EMAIL_0]", "session_id": "..."}`
+- **Response**: `{"restored_text": "Here is the response for test@example.com"}`
+
+### `POST /api/document/redact`
+Redacts a supported document file (.pdf, .docx, .xlsx, .pptx, .csv, .txt).
+- **Body**: `multipart/form-data` with `file` and optional `session_id`.
+- **Response**: Downloadable redacted file.
+
+### `GET /api/rules` | `POST /api/rules`
+Manage custom rules.
+- **POST Body**: `{"action": "add", "rule": {...}}` or `{"action": "delete", "rule_name": "..."}`
+
+### `GET /api/sessions` | `DELETE /api/sessions/<id>`
+Manage active memory sessions.

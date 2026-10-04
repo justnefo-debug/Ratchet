@@ -1,4 +1,7 @@
 import fitz  # PyMuPDF
+import pytesseract
+from PIL import Image
+import io
 from .base_handler import DocumentHandler
 from typing import List, Dict
 from core.models import Entity
@@ -9,7 +12,16 @@ class PDFHandler(DocumentHandler):
         text = ""
         doc = fitz.open(file_path)
         for page in doc:
-            text += page.get_text("text") + "\n"
+            page_text = page.get_text("text")
+            # If the page has very little text, it might be a scanned document
+            if len(page_text.strip()) < 50:
+                # Try OCR
+                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                img = Image.open(io.BytesIO(pix.tobytes("png")))
+                ocr_text = pytesseract.image_to_string(img)
+                text += ocr_text + "\n"
+            else:
+                text += page_text + "\n"
         doc.close()
         return text
         

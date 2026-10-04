@@ -1,6 +1,7 @@
 from typing import List, Tuple, Dict
 from detectors.regex_detector import RegexDetector
 from detectors.ner_detector import NERDetector
+from detectors.custom_rules import CustomRulesDetector
 from core.redactor import Redactor
 from core.restorer import Restorer
 from core.mapping_store import MappingStore
@@ -10,6 +11,7 @@ class PipelineEngine:
     def __init__(self):
         self.regex_detector = RegexDetector()
         self.ner_detector = NERDetector()
+        self.custom_rules_detector = CustomRulesDetector()
         self.redactor = Redactor()
         self.restorer = Restorer()
         self.store = MappingStore()
@@ -18,6 +20,8 @@ class PipelineEngine:
         entities = []
         entities.extend(self.regex_detector.detect(text))
         entities.extend(self.ner_detector.detect(text))
+        entities.extend(self.custom_rules_detector.detect(text))
+
         
         # Simple deduplication by overlapping intervals
         entities.sort(key=lambda x: x.start)

@@ -10,7 +10,7 @@ import {
   FileCheck,
 } from 'lucide-react';
 import type { SessionRecord } from '../types';
-import { restoreTextFromSession, type RestorationResult } from '../engine/restorer';
+import { type RestorationResult } from '../engine/restorer';
 import { Badge } from './Badge';
 
 interface RestoreTabProps {
