@@ -75,98 +75,83 @@ Enjoy total privacy that only tightens!
 
 ---
 
-## 🧪 End-to-End Stress Test
+## 🧪 Comprehensive Manual Test Guide
 
-If you want to quickly test the full power of Ratchet, follow these steps using the complex text below:
+This section provides step-by-step instructions and test data to verify **every feature** of Ratchet.
 
-### Step 1: Redact
-Copy and paste this block into the **Redact tab** on the left:
-
+### Test 1: Real-Time Text Redaction (Regex & NER)
+**Feature:** Instant scanning of sensitive data (Emails, Phones, Names, API Keys, Credit Cards, IPs, etc.).
+**Action:** 
+1. Open the Ratchet **Redact Tab**.
+2. Paste the following data into the left input box:
 ```text
-Confidential Memo - INTERNAL USE ONLY
-
-On October 4th, 2026, I, Dr. A.Smith, met with the engineering lead (contact: J.Doe or reach him at +1 (415) 555-9821 / j.doe_secret@alpha-corp.io). We discussed the migration of the database server located at 192.168.100.45.
-
-Please note the following credentials must be rotated immediately:
-AWS Access Key: AKIAIOSFODNN7EXAMPLE
-GitHub Token: ghp_9876543210abcdef9876543210abcdef9876
-Stripe Prod Key: sk-live-51HxyzABCDEF1234567890mnopqrstuv
-
-Also, finance requested we verify the transaction made with the corporate Visa card ending in 4111. The full number on file is 4111-1111-1111-1111 (Luhn valid). 
-
-Lastly, Syed Bilal's Pakistani ID (CNIC: 42101-1122334-9) needs to be updated in the HR portal along with his alternate contact number 0300-1234567. He is based out of Karachi.
+Hey John Doe,
+Please review the server at 192.168.1.1. The AWS Key is AKIAIOSFODNN7EXAMPLE.
+Also, charge the Visa card 4111-1111-1111-1111. Contact me at 555-0198 or test@example.com.
+My CNIC is 42101-1234567-1 and my DOB is 12/05/1990.
 ```
+**Expected Output:**
+- On the right side, the text should read: `Hey [PERSON_1], Please review the server at [IPV4_1]. The AWS Key is [API_KEY_1]. Also, charge the Visa card [CREDIT_CARD_1]. Contact me at [PHONE_1] or [EMAIL_1]. My CNIC is [CNIC_1] and my DOB is [DATE_OF_BIRTH_1].`
+- Below the text boxes, the Entity Table should list all detected items with their confidence scores and colored badges.
 
-### Step 2: Send to Vault
-Click the **"Send to Restore"** button at the bottom of the Redact tab. This securely saves your original data in the local vault and switches you to the Restore tab.
+### Test 2: Custom Rules Engine
+**Feature:** Detecting user-defined keywords, regex patterns, or globs.
+**Action:**
+1. Open the **Settings Modal** (gear icon) or the Extension Options page.
+2. Under "Custom Rules", you should see pre-loaded rules like "Project Phoenix".
+3. Add a new rule: Type = `keyword`, Values = `SuperSecretProject`, Category = `PROJECT_CODENAME`.
+4. Go back to the Redact Tab and type: `We are launching SuperSecretProject tomorrow.`
+**Expected Output:**
+- `SuperSecretProject` is instantly highlighted and replaced with `[PROJECT_CODENAME_1]`.
 
-### Step 3: Restore
-Now, copy and paste this simulated AI response into the **Restore tab** on the left to watch Ratchet automatically unpack the vault and swap your originals back in:
+### Test 3: Document Redaction (PDF, DOCX, XLSX, TXT, CSV)
+**Feature:** Safe removal of sensitive data from physical files.
+**Action:**
+1. Create a plain text file (`test.txt`) containing: `John Smith's email is john@company.com.`
+2. Go to the Redact Tab, click **Upload Document**, and select `test.txt`.
+**Expected Output:**
+- A file named `safe_test.txt` is automatically downloaded.
+- Opening `safe_test.txt` reveals the text: `[PERSON_1]'s email is [EMAIL_1].`
+*(You can repeat this process with a `.docx`, `.pdf`, `.csv`, or `.xlsx` file containing the same text. The output file will maintain its format but with redacted data).*
 
+### Test 4: Entity Toggle (Selective Un-redaction)
+**Feature:** Allowing specific safe entities to pass through un-redacted.
+**Action:**
+1. Paste `My name is Alice and my email is alice@test.com` into the Redact Tab.
+2. In the Entity Table below, uncheck the box next to the `[PERSON_1]` (Alice).
+**Expected Output:**
+- The safe text immediately updates to: `My name is Alice and my email is [EMAIL_1]`.
+
+### Test 5: Vault Restoration (Exact & Fuzzy Match)
+**Feature:** Swapping placeholders back to their original values, even if the AI slightly modifies them.
+**Action:**
+1. After completing Test 1, click **Send to Restore**.
+2. Switch to the **Restore Tab**. Ensure the latest session is selected.
+3. Paste the following simulated AI response:
 ```text
-Thank you for the update. I have logged the migration of the database server at [IP_1]. 
-
-I strongly recommend that you notify [PERSON_1] and [PERSON_2] immediately. A security alert will be dispatched to [EMAIL_1] and an SMS to [PHONE_1]. 
-
-The credentials [API_KEY_1], [API_KEY_2], and [API_KEY_3] must be rotated via your cloud provider's secure console. 
-
-We have also verified the charges on the card [CARD_1]. Finally, the HR record for [PERSON_3] (ID: [CNIC_1]) and their contact number [PHONE_2] have been successfully updated in the system.
+I have checked the server [IPV4_1]. I emailed [EMAIL_1] and called PHONE_1 (notice the missing brackets). 
+I also rotated the key API_KEY_1 and verified the card [CREDIT_CARD_1].
 ```
+**Expected Output:**
+- The right panel instantly decodes the text to:
+`I have checked the server 192.168.1.1. I emailed test@example.com and called 555-0198. I also rotated the key AKIAIOSFODNN7EXAMPLE and verified the card 4111-1111-1111-1111.`
+*(Note how `PHONE_1` and `API_KEY_1` were successfully restored even though the brackets were removed by the AI, proving the fuzzy-matcher works!).*
 
----
+### Test 6: Metrics & Telemetry
+**Feature:** Tracking total protected items locally.
+**Action:**
+1. Click on the **Metrics Tab**.
+**Expected Output:**
+- The total items protected counter should have increased based on the previous tests.
+- The bar charts and donut charts should accurately reflect the breakdown of entity types (e.g., Emails, API Keys) you just processed.
 
-## 📁 Document Upload Test Data
-
-To test the **Document Upload** feature (true redaction for files), you will need to create a test file. Here is sample data you can use to create your own test `.docx` (Word), `.xlsx` (Excel), or `.pdf` file.
-
-### For a Word (.docx) or PDF File:
-1. Open Microsoft Word or Google Docs.
-2. Copy and paste the following text into the document:
-
-```text
-EMPLOYEE HR RECORD
-Name: Johnathan Davis
-Personal Email: j.davis_personal@gmail.com
-Emergency Contact: +1 (555) 123-9876
-
-Banking Details
-Bank Name: Chase Bank
-Card on File: 4532-1111-1111-1111
-Routing Code: 123456789
-
-System Access Credentials:
-AWS Production Key: AKIAIOSFODNN7EXAMPLE
-GitHub Admin Token: ghp_9876543210abcdef9876543210abcdef9876
-```
-3. Save the file as `HR_Test_Record.docx` (or Export it as a PDF).
-4. Go to Ratchet's Redact tab, click **Upload Document**, and select the file you just saved. 
-5. Open the downloaded `safe_HR_Test_Record` file and verify that the names, emails, cards, and keys are permanently overwritten!
-
-### For an Excel (.xlsx) File:
-1. Open Microsoft Excel or Google Sheets.
-2. Create a small table by typing the following data into the cells:
-   - **Cell A1**: `Customer Name` | **Cell B1**: `Alex Morgan`
-   - **Cell A2**: `Email Address` | **Cell B2**: `alex.morgan@startup.io`
-   - **Cell A3**: `Billing Card`  | **Cell B3**: `4111-1111-1111-1111`
-   - **Cell A4**: `Account ID`    | **Cell B4**: `CNIC: 42101-9998887-1`
-3. Save the file as `Finance_Test_Sheet.xlsx`.
-4. Upload it to Ratchet, and watch how it securely redacts the specific cells without corrupting the spreadsheet format!
-
-### Step 3: Test Document Restoration
-Just like regular text, whenever you upload a document, Ratchet securely saves those placeholders to your local vault. You can test decoding an AI's response to your document by pasting the following into the **Restore Tab**:
-
-**If you uploaded the HR Record (Word/PDF), paste this:**
-```text
-I have reviewed the HR record for [PERSON_1]. 
-
-I will send the onboarding packet to their personal email at [EMAIL_1] and verify their emergency contact number [PHONE_1]. 
-
-The banking details for the card ending in [CARD_1] have been added to payroll. Please ensure their AWS Key [API_KEY_1] and GitHub Token [API_KEY_2] are rotated every 90 days.
-```
-
-**If you uploaded the Finance Sheet (Excel), paste this:**
-```text
-The spreadsheet has been analyzed. 
-
-The primary customer is [PERSON_1] and they can be contacted at [EMAIL_1]. The recurring billing is set up on the card [CARD_1] linked to the Pakistani Identity Account [CNIC_1].
-```
+### Test 7: Chrome Extension Interceptor
+**Feature:** Intercepting inputs natively on ChatGPT/Claude websites.
+**Action:**
+1. Load the `extension/dist` folder into Chrome (`chrome://extensions` -> Load Unpacked).
+2. Go to `https://chatgpt.com`.
+3. Type `My secret email is hidden@domain.com` into the chat input box.
+4. Click the floating `🛡️ Redact Input` button injected by Ratchet.
+**Expected Output:**
+- The text inside the ChatGPT input box is instantly replaced with `My secret email is [EMAIL_1]`.
+- (To restore the AI's answer, you can open the Ratchet Extension popup and use the Restore tab).
