@@ -1,0 +1,240 @@
+[
+  {
+    "id": "rare-person-1",
+    "text": "Dr. Zephaniah Quist delivered the opening remarks on rare astrophysics phenomena.",
+    "entities": [
+      { "text": "Zephaniah Quist", "category": "PERSON" }
+    ]
+  },
+  {
+    "id": "rare-person-2",
+    "text": "Please forward the briefing document to Kalliope Xanthopoulos before noon tomorrow.",
+    "entities": [
+      { "text": "Kalliope Xanthopoulos", "category": "PERSON" }
+    ]
+  },
+  {
+    "id": "rare-person-3",
+    "text": "We received confirmation from Thorfinn Sigurdsson regarding the maritime shipping manifest.",
+    "entities": [
+      { "text": "Thorfinn Sigurdsson", "category": "PERSON" }
+    ]
+  },
+  {
+    "id": "rare-person-4",
+    "text": "Lead researcher Chidiebube Nnamani published the genomics dataset in the repository.",
+    "entities": [
+      { "text": "Chidiebube Nnamani", "category": "PERSON" }
+    ]
+  },
+  {
+    "id": "rare-person-5",
+    "text": "Attorney Willemke Hiemstra filed the patent appeal on behalf of the client.",
+    "entities": [
+      { "text": "Willemke Hiemstra", "category": "PERSON" }
+    ]
+  },
+  {
+    "id": "rare-person-6",
+    "text": "Composer Bohuslav Martinu conducted the ensemble performance in the auditorium.",
+    "entities": [
+      { "text": "Bohuslav Martinu", "category": "PERSON" }
+    ]
+  },
+  {
+    "id": "rare-person-7",
+    "text": "Diplomat Fjolla Hoxha represented the delegation during the multilateral discussions.",
+    "entities": [
+      { "text": "Fjolla Hoxha", "category": "PERSON" }
+    ]
+  },
+  {
+    "id": "rare-person-8",
+    "text": "Architect Gwilym Pugh inspected the structural integrity of the suspension bridge.",
+    "entities": [
+      { "text": "Gwilym Pugh", "category": "PERSON" }
+    ]
+  },
+  {
+    "id": "rare-person-9",
+    "text": "Eysteinn Sigurdarson submitted the translation manuscript for review.",
+    "entities": [
+      { "text": "Eysteinn Sigurdarson", "category": "PERSON" }
+    ]
+  },
+  {
+    "id": "rare-person-10",
+    "text": "I had a detailed phone call with Saskia van der Meer regarding the quarterly budget.",
+    "entities": [
+      { "text": "Saskia van der Meer", "category": "PERSON" }
+    ]
+  },
+  {
+    "id": "small-town-1",
+    "text": "The environmental monitoring station is stationed in Ballachulish near the loch.",
+    "entities": [
+      { "text": "Ballachulish", "category": "LOCATION" }
+    ]
+  },
+  {
+    "id": "small-town-2",
+    "text": "Our logistics team stopped overnight in Skibbereen before continuing toward the coast.",
+    "entities": [
+      { "text": "Skibbereen", "category": "LOCATION" }
+    ]
+  },
+  {
+    "id": "small-town-3",
+    "text": "A remote sensor detected seismic tremors near Zeballos early this morning.",
+    "entities": [
+      { "text": "Zeballos", "category": "LOCATION" }
+    ]
+  },
+  {
+    "id": "small-town-4",
+    "text": "The alpine workshop is scheduled to take place in Mittenwald this autumn.",
+    "entities": [
+      { "text": "Mittenwald", "category": "LOCATION" }
+    ]
+  },
+  {
+    "id": "small-town-5",
+    "text": "Regional engineers are deploying the telecom relay tower in Wagga Wagga.",
+    "entities": [
+      { "text": "Wagga Wagga", "category": "LOCATION" }
+    ]
+  },
+  {
+    "id": "small-town-6",
+    "text": "Historical archives are preserved in the cliffside village of Castellfollit.",
+    "entities": [
+      { "text": "Castellfollit", "category": "LOCATION" }
+    ]
+  },
+  {
+    "id": "small-town-7",
+    "text": "Weather stations in Ushguli reported heavy snowfall across the high mountain passes.",
+    "entities": [
+      { "text": "Ushguli", "category": "LOCATION" }
+    ]
+  },
+  {
+    "id": "small-town-8",
+    "text": "Delegates gathered for a peaceful summit at the lakeside retreat in Bled.",
+    "entities": [
+      { "text": "Bled", "category": "LOCATION" }
+    ]
+  },
+  {
+    "id": "small-town-9",
+    "text": "We relocated our field headquarters to Inistioge for the duration of the survey.",
+    "entities": [
+      { "text": "Inistioge", "category": "LOCATION" }
+    ]
+  },
+  {
+    "id": "small-town-10",
+    "text": "The heritage sanctuary in Oakhaven reopened its doors to conservationists.",
+    "entities": [
+      { "text": "Oakhaven", "category": "LOCATION" }
+    ]
+  },
+  {
+    "id": "small-company-1",
+    "text": "Our supply chain contract was awarded to Cobblestone Dynamics Ltd. after bidding.",
+    "entities": [
+      { "text": "Cobblestone Dynamics Ltd.", "category": "ORG" }
+    ]
+  },
+  {
+    "id": "small-company-2",
+    "text": "Maritime navigation systems were overhauled by Kite & Anchor LLC last month.",
+    "entities": [
+      { "text": "Kite & Anchor LLC", "category": "ORG" }
+    ]
+  },
+  {
+    "id": "small-company-3",
+    "text": "Security auditors from Pinnacle Forge Technologies examined our firewall configuration.",
+    "entities": [
+      { "text": "Pinnacle Forge Technologies", "category": "ORG" }
+    ]
+  },
+  {
+    "id": "small-company-4",
+    "text": "Legal counsel was retained through Bramble & Thorn Partners for the merger.",
+    "entities": [
+      { "text": "Bramble & Thorn Partners", "category": "ORG" }
+    ]
+  },
+  {
+    "id": "small-company-5",
+    "text": "Bespoke leather goods were manufactured by Veloce Artisans Inc. in limited runs.",
+    "entities": [
+      { "text": "Veloce Artisans Inc.", "category": "ORG" }
+    ]
+  },
+  {
+    "id": "small-company-6",
+    "text": "Risk assessment was finalized by Northcreek Analytics Group earlier today.",
+    "entities": [
+      { "text": "Northcreek Analytics Group", "category": "ORG" }
+    ]
+  },
+  {
+    "id": "small-company-7",
+    "text": "Cloud migration is being managed by Solstice Meridian Labs for the hospital.",
+    "entities": [
+      { "text": "Solstice Meridian Labs", "category": "ORG" }
+    ]
+  },
+  {
+    "id": "small-company-8",
+    "text": "Precision lenses were sourced from OpticWave Corporation under warranty.",
+    "entities": [
+      { "text": "OpticWave Corporation", "category": "ORG" }
+    ]
+  },
+  {
+    "id": "misspelling-1",
+    "text": "Spoke with jhonathan smyth regarding his pending security clearance.",
+    "entities": [
+      { "text": "jhonathan smyth", "category": "PERSON" }
+    ]
+  },
+  {
+    "id": "misspelling-2",
+    "text": "Please reply to michel rodrigez concerning the freight shipment invoice.",
+    "entities": [
+      { "text": "michel rodrigez", "category": "PERSON" }
+    ]
+  },
+  {
+    "id": "misspelling-3",
+    "text": "The developer meetup will take place in san francicso next Tuesday.",
+    "entities": [
+      { "text": "san francicso", "category": "LOCATION" }
+    ]
+  },
+  {
+    "id": "misspelling-4",
+    "text": "Our European sales team is traveling to londn for customer workshops.",
+    "entities": [
+      { "text": "londn", "category": "LOCATION" }
+    ]
+  },
+  {
+    "id": "misspelling-5",
+    "text": "The vulnerability was reported to microsft corp security response center.",
+    "entities": [
+      { "text": "microsft corp", "category": "ORG" }
+    ]
+  },
+  {
+    "id": "misspelling-6",
+    "text": "Researchers at gogle labs released a technical preview of the compiler.",
+    "entities": [
+      { "text": "gogle labs", "category": "ORG" }
+    ]
+  }
+]

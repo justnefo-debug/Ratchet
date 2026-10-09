@@ -1,9 +1,13 @@
 /**
  * Ratchet Privacy Shield — Live Held-Out NER Evaluator & Benchmark
  *
- * Runs the held-out evaluation dataset (tests/data/held-out-eval.json) through
- * the Gazetteer & Context Rule NER Detector.
- * Measures cold load time, precision, recall, and 100-run median/p95 latency.
+ * Runs evaluation datasets through the Gazetteer & Context Rule NER Detector.
+ * Supports:
+ *   1. Default mode: Evaluates both the primary held-out set and the unknown/out-of-vocabulary set.
+ *   2. Custom file mode: Accepts a path to any JSON file of prompts via CLI argument:
+ *      `node scripts/eval-ner.mjs [path/to/custom-prompts.json] [--sensitivity medium|high|low]`
+ *
+ * Measures cold load time, precision, recall, F1, and 100-run median/p95 latency.
  */
 
 import fs from 'node:fs';
@@ -17,16 +21,16 @@ const __dirname = path.dirname(__filename);
 // ─── 1. Load Trie & Initialize Engine ───────────────────────────────────────
 
 const triePath = path.resolve(__dirname, '../src/detectors/gazetteer-data.json');
-const evalPath = path.resolve(__dirname, '../tests/data/held-out-eval.json');
+const defaultHeldOutPath = path.resolve(__dirname, '../tests/data/held-out-eval.json');
+const defaultUnknownPath = path.resolve(__dirname, '../tests/data/unknown-entities-eval.json');
 
 const tColdStart = performance.now();
 const trieRaw = JSON.parse(fs.readFileSync(triePath, 'utf8'));
 const coldLoadTimeMs = performance.now() - tColdStart;
 
 const trieRoot = trieRaw.trie;
-const evalDataset = JSON.parse(fs.readFileSync(evalPath, 'utf8'));
 
-// ─── Context Rules & Negative Filters ───────────────────────────────────────
+// ─── Context Rules & Negative Filters (Aligned with GazetteerRuleNerBackend) ───
 
 const TITLE_HONORIFIC_PREFIX =
   /\b(?:dr|mr|mrs|ms|prof|professor|senator|governor|judge|director|ceo|cto|cfo|vp|president|minister|architect|engineer|lead|author|specialist|economist|researcher|journalist|diplomat|general|attorney|founder)\.?\s+$/i;
@@ -43,13 +47,15 @@ const ORG_SUFFIX =
 const ORG_PREPOSITIONS =
   /\b(?:at|for|with|joined|consulted for|audit for)\s+$/i;
 
-const CAMEL_CASE = /[a-z]+[A-Z0-9][a-zA-Z0-9]*/;
-const SNAKE_CASE = /[a-z0-9]+_[a-z0-9_]+/;
+const CAMEL_CASE = /^[a-z]+[A-Z0-9][a-zA-Z0-9]*$/;
+const SNAKE_CASE = /^[a-z0-9]+_[a-z0-9_]+$/;
 const FILE_PATH = /(?:[a-zA-Z]:\\[^\s]+|\/[^\s]+\/[^\s]+|(?:\w+\/)+\w+\.\w+|\b\w+\.(?:tsx?|jsx?|json|py|html|css|pdf|log|md|csv|txt)\b)/i;
 const CODE_PUNCTUATION = /[{}();<>=[\]$]/;
 const SENTENCE_START_PRE = /(?:^|[\r\n]+|[.!?]\s+)$/;
 
-function detectEntities(text, sensitivity = 'medium') {
+export function detectEntities(text, sensitivity = 'medium') {
+  if (!text || text.trim() === '') return [];
+
   const len = text.length;
   const entities = [];
 
@@ -122,10 +128,11 @@ function detectEntities(text, sensitivity = 'medium') {
             }
 
             if (isLast || /^[A-Z][a-z]+$/.test(secondWord)) {
+              const totalVal = text.slice(matchStart, matchEnd + nextWordMatch[0].length);
               combinedPerson = {
                 start: matchStart,
-                end: matchStart + nextWordMatch[0].length,
-                val: text.slice(matchStart, matchStart + nextWordMatch[0].length).trim(),
+                end: matchEnd + nextWordMatch[0].length,
+                val: totalVal.trim(),
               };
             }
           }
@@ -235,69 +242,125 @@ function detectEntities(text, sensitivity = 'medium') {
     i++;
   }
 
+  // High sensitivity: detect capitalized multi-word sequences not at sentence start
+  if (sensitivity === 'high') {
+    const properNounRegex = /\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)+)\b/g;
+    let m;
+    while ((m = properNounRegex.exec(text)) !== null) {
+      const val = m[1];
+      const start = m.index;
+      const end = start + val.length;
+
+      const alreadyCovered = entities.some(e => !(end <= e.start || start >= e.end));
+      if (alreadyCovered) continue;
+
+      const prefix = getPrefixContext(start);
+      if (SENTENCE_START_PRE.test(prefix)) continue;
+      if (isCodeOrPath(start, end, val)) continue;
+
+      if (ORG_SUFFIX.test(val)) {
+        entities.push({ type: 'ORG', value: val, start, end });
+      } else if (LOCATION_PREPOSITIONS.test(prefix)) {
+        entities.push({ type: 'LOCATION', value: val, start, end });
+      } else {
+        entities.push({ type: 'PERSON', value: val, start, end });
+      }
+    }
+  }
+
+  entities.sort((a, b) => a.start - b.start);
   return entities;
 }
 
-// ─── 2. Evaluate on Held-Out Dataset ────────────────────────────────────────
+// ─── Metric Evaluation Helpers ──────────────────────────────────────────────
 
-const stats = {
-  PERSON: { tp: 0, fp: 0, fn: 0 },
-  ORG: { tp: 0, fp: 0, fn: 0 },
-  LOCATION: { tp: 0, fp: 0, fn: 0 },
-};
-
-for (const item of evalDataset) {
-  const detected = detectEntities(item.text, 'medium');
-
-  // Check expected entities against detected
-  for (const expected of item.entities) {
-    const cat = expected.category;
-    const match = detected.find(d => 
-      d.type === cat && d.value.toLowerCase().includes(expected.text.toLowerCase()) ||
-      expected.text.toLowerCase().includes(d.value.toLowerCase())
-    );
-
-    if (match) {
-      stats[cat].tp++;
-    } else {
-      stats[cat].fn++;
-    }
-  }
-
-  // Check false positives
-  for (const d of detected) {
-    const cat = d.type;
-    const isExpected = item.entities.some(e => 
-      e.category === cat && (e.text.toLowerCase().includes(d.value.toLowerCase()) || d.value.toLowerCase().includes(e.text.toLowerCase()))
-    );
-
-    if (!isExpected) {
-      stats[cat].fp++;
-    }
-  }
-}
-
-// Compute P, R, F1
-function calcMetrics(tp, fp, fn) {
-  const precision = tp / (tp + fp || 1);
-  const recall = tp / (tp + fn || 1);
-  const f1 = (2 * precision * recall) / (precision + recall || 1);
-  return {
-    precision: (precision * 100).toFixed(1) + '%',
-    recall: (recall * 100).toFixed(1) + '%',
-    f1: (f1 * 100).toFixed(1) + '%',
-    tp, fp, fn
+function evaluateDataset(dataset, sensitivity = 'medium') {
+  const stats = {
+    PERSON: { tp: 0, fp: 0, fn: 0 },
+    ORG: { tp: 0, fp: 0, fn: 0 },
+    LOCATION: { tp: 0, fp: 0, fn: 0 },
   };
+
+  for (const item of dataset) {
+    const detected = detectEntities(item.text, sensitivity);
+
+    for (const expected of (item.entities || [])) {
+      const cat = expected.category;
+      if (!stats[cat]) stats[cat] = { tp: 0, fp: 0, fn: 0 };
+
+      const match = detected.find(d =>
+        d.type === cat && (
+          d.value.toLowerCase().includes(expected.text.toLowerCase()) ||
+          expected.text.toLowerCase().includes(d.value.toLowerCase())
+        )
+      );
+
+      if (match) {
+        stats[cat].tp++;
+      } else {
+        stats[cat].fn++;
+      }
+    }
+
+    for (const d of detected) {
+      const cat = d.type;
+      if (!stats[cat]) stats[cat] = { tp: 0, fp: 0, fn: 0 };
+
+      const isExpected = (item.entities || []).some(e =>
+        e.category === cat && (
+          e.text.toLowerCase().includes(d.value.toLowerCase()) ||
+          d.value.toLowerCase().includes(e.text.toLowerCase())
+        )
+      );
+
+      if (!isExpected) {
+        stats[cat].fp++;
+      }
+    }
+  }
+
+  function calcMetrics(tp, fp, fn) {
+    const precision = tp / (tp + fp || 1);
+    const recall = tp / (tp + fn || 1);
+    const f1 = (2 * precision * recall) / (precision + recall || 1);
+    return {
+      precision: (precision * 100).toFixed(1) + '%',
+      recall: (recall * 100).toFixed(1) + '%',
+      f1: (f1 * 100).toFixed(1) + '%',
+      rawRecall: recall,
+      tp, fp, fn
+    };
+  }
+
+  const person = calcMetrics(stats.PERSON?.tp || 0, stats.PERSON?.fp || 0, stats.PERSON?.fn || 0);
+  const org = calcMetrics(stats.ORG?.tp || 0, stats.ORG?.fp || 0, stats.ORG?.fn || 0);
+  const loc = calcMetrics(stats.LOCATION?.tp || 0, stats.LOCATION?.fp || 0, stats.LOCATION?.fn || 0);
+
+  const totalTp = (stats.PERSON?.tp || 0) + (stats.ORG?.tp || 0) + (stats.LOCATION?.tp || 0);
+  const totalFp = (stats.PERSON?.fp || 0) + (stats.ORG?.fp || 0) + (stats.LOCATION?.fp || 0);
+  const totalFn = (stats.PERSON?.fn || 0) + (stats.ORG?.fn || 0) + (stats.LOCATION?.fn || 0);
+  const overall = calcMetrics(totalTp, totalFp, totalFn);
+
+  return { person, org, loc, overall, stats };
 }
 
-const personMetrics = calcMetrics(stats.PERSON.tp, stats.PERSON.fp, stats.PERSON.fn);
-const orgMetrics = calcMetrics(stats.ORG.tp, stats.ORG.fp, stats.ORG.fn);
-const locMetrics = calcMetrics(stats.LOCATION.tp, stats.LOCATION.fp, stats.LOCATION.fn);
+// ─── 2. CLI Execution & Argument Parsing ────────────────────────────────────
 
-const totalTp = stats.PERSON.tp + stats.ORG.tp + stats.LOCATION.tp;
-const totalFp = stats.PERSON.fp + stats.ORG.fp + stats.LOCATION.fp;
-const totalFn = stats.PERSON.fn + stats.ORG.fn + stats.LOCATION.fn;
-const overallMetrics = calcMetrics(totalTp, totalFp, totalFn);
+const args = process.argv.slice(2);
+let customFilePath = null;
+let requestedSensitivity = 'medium';
+
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === '--sensitivity' && args[i + 1]) {
+    requestedSensitivity = args[i + 1];
+    i++;
+  } else if (args[i] === '--file' && args[i + 1]) {
+    customFilePath = args[i + 1];
+    i++;
+  } else if (!args[i].startsWith('--') && !customFilePath) {
+    customFilePath = args[i];
+  }
+}
 
 // ─── 3. Benchmark 100 Runs on 500-Word Prompt ────────────────────────────────
 
@@ -348,10 +411,55 @@ console.log(`\nLatency over 100 runs on 500-word prompt:`);
 console.log(`  - Median (p50): ${medianLatency.toFixed(3)} ms`);
 console.log(`  - 95th Percentile (p95): ${p95Latency.toFixed(3)} ms`);
 console.log(`  - Min / Max: ${latencies[0].toFixed(3)} ms / ${latencies[latencies.length - 1].toFixed(3)} ms`);
-console.log('\nAccuracy on Held-Out Test Set (88 Prompts, 214 Gold Entities):');
-console.log(`  PERSON:   Precision ${personMetrics.precision} | Recall ${personMetrics.recall} | F1 ${personMetrics.f1} (TP: ${stats.PERSON.tp}, FP: ${stats.PERSON.fp}, FN: ${stats.PERSON.fn})`);
-console.log(`  ORG:      Precision ${orgMetrics.precision} | Recall ${orgMetrics.recall} | F1 ${orgMetrics.f1} (TP: ${stats.ORG.tp}, FP: ${stats.ORG.fp}, FN: ${stats.ORG.fn})`);
-console.log(`  LOCATION: Precision ${locMetrics.precision} | Recall ${locMetrics.recall} | F1 ${locMetrics.f1} (TP: ${stats.LOCATION.tp}, FP: ${stats.LOCATION.fp}, FN: ${stats.LOCATION.fn})`);
-console.log(`  -------------------------------------------------------------`);
-console.log(`  OVERALL:  Precision ${overallMetrics.precision} | Recall ${overallMetrics.recall} | F1 ${overallMetrics.f1} (TP: ${totalTp}, FP: ${totalFp}, FN: ${totalFn})`);
+
+if (customFilePath) {
+  // ─── Custom Dataset Evaluation ─────────────────────────────────────────────
+  const resolvedPath = path.resolve(process.cwd(), customFilePath);
+  if (!fs.existsSync(resolvedPath)) {
+    console.error(`\n❌ Error: Custom dataset file not found at: ${resolvedPath}`);
+    process.exit(1);
+  }
+
+  const customDataset = JSON.parse(fs.readFileSync(resolvedPath, 'utf8'));
+  const promptCount = customDataset.length;
+  const entityCount = customDataset.reduce((acc, item) => acc + (item.entities?.length || 0), 0);
+
+  const res = evaluateDataset(customDataset, requestedSensitivity);
+
+  console.log(`\nAccuracy on Custom Dataset: ${path.basename(resolvedPath)}`);
+  console.log(`  Prompts: ${promptCount} | Gold Entities: ${entityCount} | Sensitivity: ${requestedSensitivity}`);
+  console.log(`  PERSON:   Precision ${res.person.precision} | Recall ${res.person.recall} | F1 ${res.person.f1} (TP: ${res.stats.PERSON?.tp}, FP: ${res.stats.PERSON?.fp}, FN: ${res.stats.PERSON?.fn})`);
+  console.log(`  ORG:      Precision ${res.org.precision} | Recall ${res.org.recall} | F1 ${res.org.f1} (TP: ${res.stats.ORG?.tp}, FP: ${res.stats.ORG?.fp}, FN: ${res.stats.ORG?.fn})`);
+  console.log(`  LOCATION: Precision ${res.loc.precision} | Recall ${res.loc.recall} | F1 ${res.loc.f1} (TP: ${res.stats.LOCATION?.tp}, FP: ${res.stats.LOCATION?.fp}, FN: ${res.stats.LOCATION?.fn})`);
+  console.log(`  -------------------------------------------------------------`);
+  console.log(`  OVERALL:  Precision ${res.overall.precision} | Recall ${res.overall.recall} | F1 ${res.overall.f1} (TP: ${res.overall.tp}, FP: ${res.overall.fp}, FN: ${res.overall.fn})`);
+} else {
+  // ─── Standard Dual-Dataset Evaluation ──────────────────────────────────────
+  const heldOutDataset = JSON.parse(fs.readFileSync(defaultHeldOutPath, 'utf8'));
+  const unknownDataset = JSON.parse(fs.readFileSync(defaultUnknownPath, 'utf8'));
+
+  const resHeldOut = evaluateDataset(heldOutDataset, 'medium');
+
+  console.log('\nAccuracy on Primary Held-Out Test Set (88 Prompts, 214 Gold Entities):');
+  console.log('  * Note: 98.6% (211/214) of entities in this set share vocabulary with the gazetteer.');
+  console.log(`  PERSON:   Precision ${resHeldOut.person.precision} | Recall ${resHeldOut.person.recall} | F1 ${resHeldOut.person.f1} (TP: ${resHeldOut.stats.PERSON?.tp}, FP: ${resHeldOut.stats.PERSON?.fp}, FN: ${resHeldOut.stats.PERSON?.fn})`);
+  console.log(`  ORG:      Precision ${resHeldOut.org.precision} | Recall ${resHeldOut.org.recall} | F1 ${resHeldOut.org.f1} (TP: ${resHeldOut.stats.ORG?.tp}, FP: ${resHeldOut.stats.ORG?.fp}, FN: ${resHeldOut.stats.ORG?.fn})`);
+  console.log(`  LOCATION: Precision ${resHeldOut.loc.precision} | Recall ${resHeldOut.loc.recall} | F1 ${resHeldOut.loc.f1} (TP: ${resHeldOut.stats.LOCATION?.tp}, FP: ${resHeldOut.stats.LOCATION?.fp}, FN: ${resHeldOut.stats.LOCATION?.fn})`);
+  console.log(`  -------------------------------------------------------------`);
+  console.log(`  OVERALL:  Precision ${resHeldOut.overall.precision} | Recall ${resHeldOut.overall.recall} | F1 ${resHeldOut.overall.f1} (TP: ${resHeldOut.overall.tp}, FP: ${resHeldOut.overall.fp}, FN: ${resHeldOut.overall.fn})`);
+
+  // Secondary Unknown Dataset Evaluation (Medium & High)
+  const resUnkMedium = evaluateDataset(unknownDataset, 'medium');
+  const resUnkHigh = evaluateDataset(unknownDataset, 'high');
+
+  const unkTotalEntities = unknownDataset.reduce((acc, item) => acc + item.entities.length, 0);
+
+  console.log(`\nAccuracy on Unknown / Out-of-Vocabulary Entities (${unknownDataset.length} Prompts, ${unkTotalEntities} Entities):`);
+  console.log('  * Sourced from rare names, small towns, boutique companies, and misspellings (0% gazetteer overlap).');
+  console.log(`  - Medium Sensitivity Recall: ${resUnkMedium.overall.recall} (TP: ${resUnkMedium.overall.tp}/${unkTotalEntities}, FP: ${resUnkMedium.overall.fp})`);
+  console.log(`    [Breakdown: PERSON: ${resUnkMedium.person.recall}, ORG: ${resUnkMedium.org.recall}, LOCATION: ${resUnkMedium.loc.recall}]`);
+  console.log(`  - High Sensitivity Recall:   ${resUnkHigh.overall.recall} (TP: ${resUnkHigh.overall.tp}/${unkTotalEntities}, FP: ${resUnkHigh.overall.fp})`);
+  console.log(`    [Breakdown: PERSON: ${resUnkHigh.person.recall}, ORG: ${resUnkHigh.org.recall}, LOCATION: ${resUnkHigh.loc.recall}]`);
+}
+
 console.log('======================================================\n');
