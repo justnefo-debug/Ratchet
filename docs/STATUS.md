@@ -76,33 +76,38 @@
 
 ## 3. Pending Fixes & Resolved Audits
 
-### 3.1 Completed Fixes
-1. **Data Provenance (Fix 1 - Completed):**
-   - Verified exact entry counts in `src/detectors/gazetteer-data.json` (22.5 KB):
-     - First Names: 159
-     - Last Names: 149
-     - Organizations: 99
-     - Locations: 117
-     - Total: 524 curated entries
-   - Clarified that no bulk external datasets (US Census, GeoNames, SEC EDGAR, Wikidata) were downloaded.
-   - Rewrote `NOTICE` to explicitly disclose that all 524 entries are hand-curated seed lists dedicated under CC0 1.0 Universal Public Domain Dedication.
-2. **Evaluation Integrity (Fix 2 - Completed):**
-   - Documented that 98.6% (211 of 214 entities) in the initial `held-out-eval.json` shared vocabulary with the gazetteer.
-   - Synchronized detector logic in `scripts/eval-ner.mjs` and `src/detectors/gazetteer-ner-backend.ts` (fixed person span boundary arithmetic, aligned regex boundary filters).
-   - Created secondary out-of-vocabulary dataset `tests/data/unknown-entities-eval.json` (34 prompts, 34 entities, 0% gazetteer overlap) covering rare personal names, small towns, boutique companies, and misspellings.
-   - Evaluated and reported real numbers:
-     - Primary Held-Out (98.6% overlap): Precision 98.6%, Recall 95.3%, F1 96.9%
-     - Unknown Entities (0% overlap, Medium Sensitivity): Recall 0.0% (strict gazetteer behavior)
-     - Unknown Entities (0% overlap, High Sensitivity): Recall 29.4% (proper noun multi-word sequence heuristics)
-   - Updated `scripts/eval-ner.mjs` to accept custom user prompt JSON files via CLI argument (`node scripts/eval-ner.mjs [file.json] [--sensitivity <level>]`).
-3. **Custom-Rule Timeout in Extension Service Worker (Fix 3 - Completed):**
-   - Confirmed that dedicated `Worker` constructors cannot be instantiated in MV3 Service Workers.
-   - Identified that slow/catastrophic backtracking patterns (e.g. `x*x*x*x*y`) could freeze the background thread for seconds on long inputs.
-   - Selected and implemented the **ReDoS-safe regex subset** approach:
-     - Outlaws nested quantifiers (`(a+)+`), repeated alternations with overlaps, and adjacent overlapping unbounded quantifiers (`x*x*`, `.*.*`).
-     - Scales dynamic timing checks in `validateRegexSafety` to test inputs up to 200 characters.
-     - Adds runtime safe-subset verification in `detectWithCustomRules` to immediately skip violating patterns before `RegExp` instantiation.
-   - Added automated Playwright test (Test 12 in `e2e.spec.ts`) verifying options UI pattern rejection and runtime resilience without worker stalls.
+### 3.1 Completed Fixes & Empirical Performance Audits
+1. **Lexicon Provenance & Expansion (Fix 1 - Completed):**
+   - Bundled Radix-Trie in `src/detectors/gazetteer-data.json` compiles to **526.5 KB (0.51 MB)**, well under the 3.0 MB budget.
+   - Total Curated Entries: **13,013** across four categories:
+     - First Names: 3,700 (SSA baby names + Wikidata multilingual given names + seeds)
+     - Last Names: 3,673 (Census 2010 + Wikidata multilingual surnames + seeds)
+     - Organizations: 2,582 (SEC EDGAR company tickers + major institutions)
+     - Locations: 3,058 (GeoNames global cities > 15,000 population + tech hubs)
+   - **Census Demographics Clarification:** Clarified that East Asian and Hispanic surname representation is sourced from a static CSV file (`Names_2010Census.csv`) from the US Census Bureau 2010 Surnames table, utilizing the demographic columns `pctapi` (Percent Asian / Pacific Islander) and `pcthispanic` (Percent Hispanic), NOT from an online "Census API".
+   - **Lexicon Hygiene:** Pruned Tsarist Russian nobility transliterations (`Makinsky`, `Talishinski`, `Erivansky`, `Ziyadkhanov`, `Shikhlinski`, `Kangarli`) that leaked into Wikidata regional queries.
+2. **Honest Evaluation & Separated Recall Metrics (Fix 2 - Completed):**
+   - Separated structured PII (>98% deterministic recall via regex and checksums) from unstructured named entity detection.
+   - **Primary Held-Out Test Set (88 Prompts, 214 Gold Entities, 98.6% vocabulary overlap):**
+     - Low Sensitivity: Recall 84.6% | Precision 91.0% | F1 87.7%
+     - Medium Sensitivity (Default): Recall 92.1% | Precision 84.2% | F1 87.9%
+     - High Sensitivity: Recall 92.1% | Precision 82.4% | F1 87.0%
+   - **Unknown / Out-of-Vocabulary Entities (34 Prompts, 34 Entities, 0% gazetteer overlap):**
+     - Low Sensitivity: Recall 2.9%
+     - Medium Sensitivity: Recall 2.9%
+     - High Sensitivity: Recall 32.4% (proper noun multi-word sequence heuristics)
+   - **False Positive Rates on Ordinary Prose:**
+     - *Tuning Benchmark (40 ordinary prompts across 5 genres):* 0.0% FPR across Low, Medium, and High sensitivity after enforcing title/preposition context requirements on ambiguous dictionary words (`mark`, `grace`, `target`, `visa`, `reading`, etc.).
+     - *Fresh Held-Out Benchmark (25 untuned prompts across 6 genres: school assignments, customer support, travel plans, sports, health-neutral how-to, job ads):*
+       - Low Sensitivity: **4.0% FPR** (1 / 25 prompts flagged: `brand` in J2)
+       - Medium Sensitivity: **12.0% FPR** (3 / 25 prompts flagged: `author` in S3, `brand` in J2, `junior` in J5)
+       - High Sensitivity: **16.0% FPR** (4 / 25 prompts flagged: + `American Industrial Revolution` in S1)
+3. **Custom-Rule Safety & Chunked Scanning (Fix 3 - Completed):**
+   - Linear-time ReDoS subset enforced: no nested quantifiers, repeated alternations, or overlapping unbounded quantifiers.
+   - Maximum pattern length capped at 200 characters (`MAX_REGEX_PATTERN_LENGTH = 200`).
+   - Quantifier upper bounds capped at 1,000 characters (`MAX_QUANTIFIER_BOUND = 1000`).
+   - Inputs are scanned in overlapping chunks (`SCAN_CHUNK_SIZE = 10000`, `SCAN_CHUNK_OVERLAP = 1000`), guaranteeing that matches up to 1,000 characters spanning chunk boundaries are captured without memory spikes.
+   - Tested and verified on 50,000-character prompts with matches at the very end and spanning chunk boundaries.
 4. **Memory Profiling Audit & Process Breakdown (Fix 4 - Completed):**
    - Clarified that the 4.46 MB figure measured by CDP `Performance.getMetrics` originates from the active web page tab context (the renderer process hosting the chat DOM and injected content script), not the extension's service worker.
    - True process-isolated memory measurements:
@@ -110,7 +115,7 @@
 | Process Context | Measured JS Heap | Working Set (Private OS Memory) | Role / Lifecycle |
 | :--- | :---: | :---: | :--- |
 | **Web Page Tab (Renderer Process)** | ~1.4 – 1.7 MB (idle page) to ~4.48 MB (heavy conversation) | ~80 – 120 MB | Hosts target chat DOM, user interactions, injected content script, and closed Shadow DOM review overlay. |
-| **Extension Background Service Worker** | ~1.5 – 2.5 MB (post-NER load, 527 KB compiled Trie) | ~35 – 50 MB | Coordinates detection, manages conversation mappings in `chrome.storage.session`, terminates when idle. |
+| **Extension Background Service Worker** | ~1.5 – 2.5 MB (post-NER load, 526.5 KB compiled Trie) | ~35 – 50 MB | Coordinates detection, manages conversation mappings in `chrome.storage.session`, terminates when idle. |
 | **Total Extension Overhead** | < 5.0 MB V8 Heap | Well within 50 MB budget | Fully browser-native MV3; zero background daemon or Python runtime. |
 
 ---
