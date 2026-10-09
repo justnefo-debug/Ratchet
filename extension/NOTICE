@@ -4,16 +4,16 @@ Ratchet bundles an offline, zero-network pre-indexed Radix-Trie lexicon for name
 
 ---
 
-## 1. Data Provenance & Category Counts
+## 1. Data Provenance, Sources & Retrieval Dates
 
-The expanded gazetteer contains a total of **13,020 curated entries** across four categories:
+The gazetteer contains a total of **13,020 curated entries** across four categories:
 
-| Category | Entry Count | Provenance & Sources | License |
-| :--- | :---: | :--- | :--- |
-| **First Names** (`FIRST_NAME`) | **3,700** | Social Security Administration (SSA) popular given names + Wikidata multilingual given names (South Asian, East Asian, Middle Eastern, African) + hand-curated seeds. | Public Domain (US Gov) / CC0 1.0 (Wikidata) |
-| **Last Names** (`LAST_NAME`) | **3,680** | US Census Bureau 2010 Frequently Occurring Surnames (with boosted representation for Asian/Pacific Islander and Hispanic demographics) + Wikidata multilingual surnames + hand-curated seeds. | Public Domain (US Gov) / CC0 1.0 (Wikidata) |
-| **Organizations** (`ORG`) | **2,582** | SEC EDGAR public company directory & tickers + prominent tech, finance, consulting, multilateral, and university institutions. | Public Domain (US Gov) / CC0 1.0 |
-| **Locations** (`LOCATION`) | **3,058** | GeoNames global metropolitan cities with population > 15,000 (`cities15000.txt`) + sovereign nations and tech hubs. | Creative Commons Attribution 4.0 International (CC BY 4.0) |
+| Category | Entry Count | Provenance & Sources | Exact Download / Endpoint URL | Retrieval Date | License |
+| :--- | :---: | :--- | :--- | :---: | :--- |
+| **First Names** (`FIRST_NAME`) | **3,700** | Social Security Administration (SSA) Popular Baby Names + Wikidata Multilingual Given Names + hand-curated seeds. | SSA: `https://raw.githubusercontent.com/hadley/data-baby-names/master/baby-names.csv`<br>Wikidata: `https://query.wikidata.org/sparql` | 2026-10-09 | Public Domain (US Gov) / CC0 1.0 (Wikidata) |
+| **Last Names** (`LAST_NAME`) | **3,680** | US Census Bureau 2010 Frequently Occurring Surnames (boosted API and Hispanic representation) + Wikidata Multilingual Surnames + hand-curated seeds. | Census: `https://www2.census.gov/topics/genealogy/2010surnames/names.zip`<br>Wikidata: `https://query.wikidata.org/sparql` | 2026-10-09 | Public Domain (US Gov) / CC0 1.0 (Wikidata) |
+| **Organizations** (`ORG`) | **2,582** | SEC EDGAR public company directory & tickers + prominent tech, finance, consulting, multilateral, and university institutions. | `https://www.sec.gov/files/company_tickers.json` | 2026-10-09 | Public Domain (US Gov) / CC0 1.0 |
+| **Locations** (`LOCATION`) | **3,058** | GeoNames global metropolitan cities with population > 15,000 (`cities15000.txt`) + sovereign nations and tech hubs. | `https://download.geonames.org/export/dump/cities15000.zip` | 2026-10-09 | Creative Commons Attribution 4.0 International (CC BY 4.0) |
 
 ---
 
@@ -21,6 +21,9 @@ The expanded gazetteer contains a total of **13,020 curated entries** across fou
 
 ### A. GeoNames
 This product includes geographical data sourced from GeoNames (http://www.geonames.org), licensed under the Creative Commons Attribution 4.0 International License:
+- **Source URL:** `https://download.geonames.org/export/dump/cities15000.zip`
+- **Retrieval Date:** October 9, 2026
+- **License Text:**
 ```
 GeoNames (www.geonames.org)
 License: Creative Commons Attribution 4.0 International (CC BY 4.0)
@@ -28,15 +31,32 @@ https://creativecommons.org/licenses/by/4.0/
 ```
 
 ### B. United States Federal Government Data
-- **US Census Bureau 2010 Surnames**: U.S. Census Bureau, Population Division. Work of the United States Government under 17 U.S.C. § 105; dedicated to the Public Domain.
-- **Social Security Administration (SSA) Popular Baby Names**: Social Security Administration, Office of the Chief Actuary. Work of the United States Government; dedicated to the Public Domain.
-- **U.S. Securities and Exchange Commission (SEC) EDGAR**: Company tickers and metadata. Work of the United States Government; dedicated to the Public Domain.
+- **US Census Bureau 2010 Surnames**:
+  - Exact URL: `https://www2.census.gov/topics/genealogy/2010surnames/names.zip`
+  - Retrieval Date: October 9, 2026
+  - Author: U.S. Census Bureau, Population Division
+  - Legal Status: Work of the United States Government under 17 U.S.C. § 105; dedicated to the Public Domain.
+- **Social Security Administration (SSA) Popular Baby Names**:
+  - Exact URL: `https://raw.githubusercontent.com/hadley/data-baby-names/master/baby-names.csv` (Mirror of SSA Actuarial Table)
+  - Retrieval Date: October 9, 2026
+  - Author: Social Security Administration, Office of the Chief Actuary
+  - Legal Status: Work of the United States Government; dedicated to the Public Domain.
+- **U.S. Securities and Exchange Commission (SEC) EDGAR**:
+  - Exact URL: `https://www.sec.gov/files/company_tickers.json`
+  - Retrieval Date: October 9, 2026
+  - Author: U.S. Securities and Exchange Commission
+  - Legal Status: Work of the United States Government; dedicated to the Public Domain.
 
 ### C. Wikidata Multilingual Entities & Curated Seeds
 Multilingual name entities extracted from Wikidata and hand-curated seeds are dedicated under the Creative Commons CC0 1.0 Universal Public Domain Dedication:
+- **Endpoint URL:** `https://query.wikidata.org/sparql`
+- **Retrieval Date:** October 9, 2026 (2026-10-09T16:31:54.961Z)
+- **Queries:** Given names (`wd:Q202444`) and family names (`wd:Q101352`) linked to country properties (`wdt:P17`) across South Asia, East Asia, Middle East/Arabic, and Africa.
+- **License Text:**
 ```
 Creative Commons Legal Code
 CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
 https://creativecommons.org/publicdomain/zero/1.0/
 ```
+
 All trie compilation, filtering, and indexing scripts are open source under the MIT License.
