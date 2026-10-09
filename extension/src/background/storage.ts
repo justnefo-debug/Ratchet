@@ -13,38 +13,96 @@ import {
   STORAGE_KEY_SETTINGS,
   STORAGE_KEY_STATS,
 } from '../shared/constants';
+import {
+  savePersistentMapping,
+  getPersistentMapping,
+  clearAllPersistentMappings,
+} from './crypto-storage';
 
 /**
- * Retrieve the mapping for a conversation from chrome.storage.session.
+ * Retrieve the mapping for a conversation from chrome.storage.session
+ * or optional AES-GCM persistent storage if persistence is enabled.
  */
 export async function getConversationMapping(
   conversationId: string,
 ): Promise<ConversationMapping | null> {
-  if (!chrome?.storage?.session) return null;
-
-  const key = `${STORAGE_KEY_CONV_PREFIX}${conversationId}`;
-  return new Promise((resolve) => {
-    chrome.storage.session.get([key], (result) => {
-      const mapping = result[key] as ConversationMapping | undefined;
-      resolve(mapping || null);
+  // 1. Check fast in-memory session storage (default)
+  if (chrome?.storage?.session) {
+    const key = `${STORAGE_KEY_CONV_PREFIX}${conversationId}`;
+    const sessionMapping = await new Promise<ConversationMapping | null>((resolve) => {
+      chrome.storage.session.get([key], (result) => {
+        const mapping = result[key] as ConversationMapping | undefined;
+        resolve(mapping || null);
+      });
     });
-  });
+
+    if (sessionMapping) {
+      return sessionMapping;
+    }
+  }
+
+  // 2. If not found in session, check optional persistent storage (off by default)
+  const settings = await getSettings();
+  if (settings.enablePersistence) {
+    const persistentMapping = await getPersistentMapping(conversationId);
+    if (persistentMapping) {
+      // Re-populate session storage for fast access
+      if (chrome?.storage?.session) {
+        const key = `${STORAGE_KEY_CONV_PREFIX}${conversationId}`;
+        chrome.storage.session.set({ [key]: persistentMapping });
+      }
+      return persistentMapping;
+    }
+  }
+
+  return null;
 }
 
 /**
- * Save or update a conversation mapping in chrome.storage.session.
+ * Save or update a conversation mapping in chrome.storage.session,
+ * and optionally in AES-GCM encrypted persistent storage if enabled.
  */
 export async function saveConversationMapping(
   mapping: ConversationMapping,
 ): Promise<void> {
-  if (!chrome?.storage?.session) return;
-
-  const key = `${STORAGE_KEY_CONV_PREFIX}${mapping.conversationId}`;
-  return new Promise((resolve) => {
-    chrome.storage.session.set({ [key]: mapping }, () => {
-      resolve();
+  // 1. Save in session storage (default)
+  if (chrome?.storage?.session) {
+    const key = `${STORAGE_KEY_CONV_PREFIX}${mapping.conversationId}`;
+    await new Promise<void>((resolve) => {
+      chrome.storage.session.set({ [key]: mapping }, () => resolve());
     });
-  });
+  }
+
+  // 2. Optionally encrypt and persist to local storage
+  const settings = await getSettings();
+  if (settings.enablePersistence) {
+    const expiryHours = settings.persistenceExpiryHours || 24;
+    await savePersistentMapping(mapping, expiryHours);
+  }
+}
+
+/**
+ * Clear all conversation mappings from both session storage and persistent storage.
+ */
+export async function clearAllMappings(): Promise<void> {
+  // 1. Clear session storage mappings
+  if (chrome?.storage?.session) {
+    await new Promise<void>((resolve) => {
+      chrome.storage.session.get(null, (items) => {
+        const keys = Object.keys(items || {}).filter((k) =>
+          k.startsWith(STORAGE_KEY_CONV_PREFIX),
+        );
+        if (keys.length > 0) {
+          chrome.storage.session.remove(keys, () => resolve());
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
+  // 2. Clear encrypted persistent mappings
+  await clearAllPersistentMappings();
 }
 
 /**

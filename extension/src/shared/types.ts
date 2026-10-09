@@ -61,6 +61,9 @@ export interface RatchetSettings {
     claude: boolean;
     gemini: boolean;
   };
+  enablePersistence: boolean;
+  persistenceExpiryHours: number;
+  entityToggles: Record<string, boolean>;
   powerMode: boolean;
   backendUrl: string;
 }

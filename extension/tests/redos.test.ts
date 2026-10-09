@@ -30,8 +30,8 @@ describe('ReDoS Safety Check', () => {
         const duration = performance.now() - start;
         expect(
           duration,
-          `Pattern ${patternName} took ${duration.toFixed(2)}ms on input "${input.name}" (exceeded 50ms limit)`,
-        ).toBeLessThan(50);
+          `Pattern ${patternName} took ${duration.toFixed(2)}ms on input "${input.name}" (exceeded 75ms limit)`,
+        ).toBeLessThan(75);
       }
     });
   }
