@@ -6,12 +6,12 @@ Ratchet bundles an offline, zero-network pre-indexed Radix-Trie lexicon for name
 
 ## 1. Data Provenance, Sources & Retrieval Dates
 
-The gazetteer contains a total of **13,020 curated entries** across four categories:
+The gazetteer contains a total of **13,013 curated entries** across four categories:
 
 | Category | Entry Count | Provenance & Sources | Exact Download / Endpoint URL | Retrieval Date | License |
 | :--- | :---: | :--- | :--- | :---: | :--- |
 | **First Names** (`FIRST_NAME`) | **3,700** | Social Security Administration (SSA) Popular Baby Names + Wikidata Multilingual Given Names + hand-curated seeds. | SSA: `https://raw.githubusercontent.com/hadley/data-baby-names/master/baby-names.csv`<br>Wikidata: `https://query.wikidata.org/sparql` | 2026-10-09 | Public Domain (US Gov) / CC0 1.0 (Wikidata) |
-| **Last Names** (`LAST_NAME`) | **3,680** | US Census Bureau 2010 Frequently Occurring Surnames (boosted API and Hispanic representation) + Wikidata Multilingual Surnames + hand-curated seeds. | Census: `https://www2.census.gov/topics/genealogy/2010surnames/names.zip`<br>Wikidata: `https://query.wikidata.org/sparql` | 2026-10-09 | Public Domain (US Gov) / CC0 1.0 (Wikidata) |
+| **Last Names** (`LAST_NAME`) | **3,673** | US Census Bureau 2010 Frequently Occurring Surnames (filtered for surnames with high Asian/Pacific Islander and Hispanic representation using the `pctapi` and `pcthispanic` demographic percentage columns in `Names_2010Census.csv`) + Wikidata Multilingual Surnames + hand-curated seeds. | Census: `https://www2.census.gov/topics/genealogy/2010surnames/names.zip`<br>Wikidata: `https://query.wikidata.org/sparql` | 2026-10-09 | Public Domain (US Gov) / CC0 1.0 (Wikidata) |
 | **Organizations** (`ORG`) | **2,582** | SEC EDGAR public company directory & tickers + prominent tech, finance, consulting, multilateral, and university institutions. | `https://www.sec.gov/files/company_tickers.json` | 2026-10-09 | Public Domain (US Gov) / CC0 1.0 |
 | **Locations** (`LOCATION`) | **3,058** | GeoNames global metropolitan cities with population > 15,000 (`cities15000.txt`) + sovereign nations and tech hubs. | `https://download.geonames.org/export/dump/cities15000.zip` | 2026-10-09 | Creative Commons Attribution 4.0 International (CC BY 4.0) |
 
