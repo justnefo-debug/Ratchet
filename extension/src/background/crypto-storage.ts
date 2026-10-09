@@ -2,12 +2,16 @@
  * Ratchet Privacy Shield — Optional Persistent Storage with AES-GCM WebCrypto
  *
  * Threat Model:
- * AES-GCM WebCrypto encryption with a non-extractable key protects persistent
- * conversation mappings at rest in chrome.storage.local from offline disk inspection,
- * unauthenticated profile extraction, and casual storage inspection. It does not
- * protect against an attacker with live process access, malware running arbitrary
- * code in the user's browser, or compromised extension code running within the
- * same origin context.
+ * Setting extractable: false on the WebCrypto key prevents JavaScript within the
+ * browser runtime from exporting the raw cryptographic key bytes via
+ * crypto.subtle.exportKey(). It protects mappings in chrome.storage.local from
+ * casual inspection, unauthenticated storage dumps, and plain-text exposure.
+ *
+ * CRITICAL LIMITATION: Because the key (stored in IndexedDB) and the encrypted
+ * records (in chrome.storage.local) reside together in the same browser profile
+ * directory, this DOES NOT protect against anyone with read access to the
+ * browser's profile folder on disk. It also does not protect against malware
+ * with memory access to the active browser process.
  */
 
 import type { ConversationMapping } from '../shared/types';

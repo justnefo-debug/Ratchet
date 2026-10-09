@@ -384,7 +384,7 @@ const Options: React.FC = () => {
           )}
 
           <div className="threat-model-box">
-            <strong>Threat Model Notice:</strong> AES-GCM WebCrypto with a non-extractable key protects conversation mappings at rest from offline disk theft and unauthenticated profile inspection. It does not protect against malware with memory access to the active browser process. Raw redacted values are never written to disk unencrypted or sent over any network.
+            <strong>Threat Model Notice:</strong> A non-extractable WebCrypto key prevents JavaScript from exporting the raw key material and protects mappings from casual inspection or plain-text storage dumps. However, because the key (IndexedDB) and encrypted data (chrome.storage.local) reside in the same browser profile directory, this <strong>does not protect against anyone with access to your browser profile folder or local disk</strong>, nor against in-memory malware while Chrome is running.
           </div>
         </section>
 
