@@ -337,5 +337,218 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
 
     await popupPage.close();
   });
+
+  // ─── Test 8: Site Toggled Off leaves Request Body Unchanged ───────────────
+  test('8: Site toggled off leaves request body unchanged and popup shows site as unprotected', async () => {
+    // 1. Toggle mock site off via extension settings
+    const extPage = await context.newPage();
+    await extPage.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+    await extPage.evaluate(() => {
+      return new Promise<void>((resolve) => {
+        chrome.storage.local.get(['ratchet_settings'], (res) => {
+          const settings = res.ratchet_settings || {};
+          settings.enabledSites = { ...(settings.enabledSites || {}), mock: false };
+          chrome.storage.local.set({ ratchet_settings: settings }, () => resolve());
+        });
+      });
+    });
+    await extPage.close();
+
+    // 2. Send prompt on mock site
+    const convId = 'conv-site-off-e2e';
+    await page.goto(`http://127.0.0.1:${PORT}/?c=${convId}`);
+    await page.waitForLoadState('networkidle');
+    server.clearLoggedRequests();
+
+    const rawEmail = 'unprotected.user@plaindomain.com';
+    await page.locator('#prompt-textarea').fill(`My email is ${rawEmail}`);
+    await page.locator('#send-textarea-btn').click();
+    await expect(page.locator('#status')).toHaveText('Completed', { timeout: 15000 });
+
+    // Assert body was left UNCHANGED because site is toggled off
+    expect(server.loggedRequests.length).toBe(1);
+    expect(server.loggedRequests[0].body).toContain(rawEmail);
+    expect(server.loggedRequests[0].body).not.toContain('«EMAIL_');
+
+    // 3. Open popup and verify site toggle is unchecked (unprotected)
+    const popupPage = await context.newPage();
+    await popupPage.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
+    await popupPage.waitForLoadState('domcontentloaded');
+
+    // Re-enable mock site for subsequent tests
+    await popupPage.evaluate(() => {
+      return new Promise<void>((resolve) => {
+        chrome.storage.local.get(['ratchet_settings'], (res) => {
+          const settings = res.ratchet_settings || {};
+          settings.enabledSites = { ...(settings.enabledSites || {}), mock: true };
+          chrome.storage.local.set({ ratchet_settings: settings }, () => resolve());
+        });
+      });
+    });
+    await popupPage.close();
+  });
+
+  // ─── Test 9: Low vs High Sensitivity Changes Redaction ────────────────────
+  test('9: Low vs High sensitivity changes what is redacted on the same input', async () => {
+    const extPage = await context.newPage();
+    await extPage.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+
+    // Add a custom rule with confidence 0.65 (between Low=0.85 and High=0.45 threshold)
+    await extPage.evaluate(() => {
+      return new Promise<void>((resolve) => {
+        chrome.storage.local.get(['ratchet_settings'], (res) => {
+          const settings = res.ratchet_settings || {};
+          settings.customRules = [
+            {
+              id: 'rule_sens_test',
+              name: 'Secret Code',
+              category: 'SECRET_CODE',
+              type: 'keyword',
+              values: ['CodenameZephyr'],
+              confidence: 0.65,
+              enabled: true,
+            },
+          ];
+          settings.sensitivity = 'low'; // threshold 0.85 -> 0.65 is below threshold
+          chrome.storage.local.set({ ratchet_settings: settings }, () => resolve());
+        });
+      });
+    });
+
+    const convId = 'conv-sens-test';
+    await page.goto(`http://127.0.0.1:${PORT}/?c=${convId}`);
+    await page.waitForLoadState('networkidle');
+    server.clearLoggedRequests();
+
+    const prompt = 'Project is CodenameZephyr.';
+
+    // Send under LOW sensitivity (threshold 0.85) -> CodenameZephyr should NOT be redacted
+    await page.locator('#prompt-textarea').fill(prompt);
+    await page.locator('#send-textarea-btn').click();
+    await expect(page.locator('#status')).toHaveText('Completed', { timeout: 15000 });
+
+    expect(server.loggedRequests.length).toBe(1);
+    expect(server.loggedRequests[0].body).toContain('CodenameZephyr');
+    expect(server.loggedRequests[0].body).not.toContain('«SECRET_CODE_');
+
+    // Switch to HIGH sensitivity (threshold 0.45) -> CodenameZephyr SHOULD be redacted
+    await extPage.evaluate(() => {
+      return new Promise<void>((resolve) => {
+        chrome.storage.local.get(['ratchet_settings'], (res) => {
+          const settings = res.ratchet_settings || {};
+          settings.sensitivity = 'high'; // threshold 0.45 -> 0.65 is above threshold
+          chrome.storage.local.set({ ratchet_settings: settings }, () => resolve());
+        });
+      });
+    });
+    await extPage.close();
+
+    server.clearLoggedRequests();
+    await page.locator('#prompt-textarea').fill(prompt);
+    await page.locator('#send-textarea-btn').click();
+    await expect(page.locator('#status')).toHaveText('Completed', { timeout: 15000 });
+
+    expect(server.loggedRequests.length).toBe(1);
+    expect(server.loggedRequests[0].body).not.toContain('CodenameZephyr');
+    expect(server.loggedRequests[0].body).toContain('«SECRET_CODE_1»');
+  });
+
+  // ─── Test 10: Persistent Storage Round-Trip Across Browser Reopen ─────────
+  test('10: Persistence on survives browser close & reopen, follow-up restores, and expiry prunes mapping', async () => {
+    // 1. Enable persistent storage
+    const extPage = await context.newPage();
+    await extPage.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+    await extPage.evaluate(() => {
+      return new Promise<void>((resolve) => {
+        chrome.storage.local.get(['ratchet_settings'], (res) => {
+          const settings = res.ratchet_settings || {};
+          settings.enablePersistence = true;
+          settings.persistenceExpiryHours = 24;
+          chrome.storage.local.set({ ratchet_settings: settings }, () => resolve());
+        });
+      });
+    });
+    await extPage.close();
+
+    // 2. Perform initial turn with persistence on
+    const convId = 'conv-persistent-roundtrip';
+    await page.goto(`http://127.0.0.1:${PORT}/?c=${convId}`);
+    await page.waitForLoadState('networkidle');
+    server.clearLoggedRequests();
+
+    const persistentEmail = 'dr.who@gallifrey.space';
+    await page.locator('#prompt-textarea').fill(`Contact: ${persistentEmail}`);
+    await page.locator('#send-textarea-btn').click();
+    await expect(page.locator('#status')).toHaveText('Completed', { timeout: 15000 });
+
+    expect(server.loggedRequests[0].body).toContain('«EMAIL_1»');
+    expect(server.loggedRequests[0].body).not.toContain(persistentEmail);
+
+    // 3. Fully close and reopen the browser context (wipes all in-memory chrome.storage.session)
+    await context.close();
+
+    context = await chromium.launchPersistentContext(tempUserDataDir, {
+      headless: false,
+      args: [
+        `--disable-extensions-except=${extensionDistPath}`,
+        `--load-extension=${extensionDistPath}`,
+        '--no-sandbox',
+      ],
+    });
+
+    let worker = context.serviceWorkers()[0];
+    if (!worker) {
+      worker = await context.waitForEvent('serviceworker');
+    }
+    extensionId = worker.url().split('/')[2];
+    page = await context.newPage();
+
+    // 4. Reopen conversation after browser reopen and verify restored history
+    await page.goto(`http://127.0.0.1:${PORT}/?c=${convId}`);
+    await page.waitForLoadState('networkidle');
+
+    await page.evaluate(() => {
+      (window as any).simulateReloadHistory('Turn from past session: «EMAIL_1»');
+    });
+
+    const userHistory = page.locator('.user-message').last();
+    await expect(userHistory).toBeVisible();
+    await expect(userHistory).toContainText(persistentEmail);
+    await expect(userHistory).not.toContainText('«EMAIL_1»');
+
+    // 5. Test expiry: expire the encrypted record in storage
+    const managePage = await context.newPage();
+    await managePage.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+    await managePage.evaluate((cid) => {
+      return new Promise<void>((resolve) => {
+        chrome.storage.local.get(null, (all) => {
+          const updates: Record<string, any> = {};
+          for (const [k, v] of Object.entries(all)) {
+            if (k.startsWith('enc:conv:')) {
+              (v as any).expiresAt = Date.now() - 1000 * 3600; // 1h ago (expired)
+              updates[k] = v;
+            }
+          }
+          chrome.storage.local.set(updates, () => {
+            // Also clear volatile session cache for this conversation so it re-reads from storage
+            chrome.storage.session.remove(['conv:' + cid], () => resolve());
+          });
+        });
+      });
+    }, convId);
+
+    // Query mapping via service worker message -> must return null because expired
+    const expiredCheck = await managePage.evaluate((cid) => {
+      return new Promise((resolve) => {
+        chrome.runtime.sendMessage({ action: 'getMapping', conversationId: cid }, (res) => {
+          resolve(res?.data?.mappings?.length || 0);
+        });
+      });
+    }, convId);
+    await managePage.close();
+
+    expect(expiredCheck).toBe(0);
+  });
 });
+
 
