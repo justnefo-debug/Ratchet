@@ -184,6 +184,13 @@ describe('Custom Rules Runtime Time Guard', () => {
     expect(runResult.timedOut).toBe(true);
     expect(runResult.matches.length).toBe(0);
   });
+
+  it('rejects regex patterns that exceed the 200 character length cap', () => {
+    const longPattern = 'a'.repeat(201);
+    const result = validateRegexSafety(longPattern);
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('exceeds 200 character limit');
+  });
 });
 
 

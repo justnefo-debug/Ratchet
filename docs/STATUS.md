@@ -30,6 +30,29 @@
 - **User Feedback & Usability:** A clear, non-intrusive warning notice is displayed to the user explaining that the request was stopped to prevent data leakage. The chat input is preserved intact so the user does not lose typed work and the chat interface remains usable.
 - **Zero Leakage Tolerance:** Prompts are never allowed to fall through to the network in an unredacted state upon system errors.
 
+### 1.5 Threat Model & Security Boundaries
+- **Network Interception Boundary:** Interception occurs in a `MAIN` world script wrapping `window.fetch` and `XMLHttpRequest`. Prompts are sanitized at the network edge before leaving the browser. External network observers, AI backend APIs, and proxy servers only ever see placeholder tokens (e.g. `«PERSON_1»`).
+- **Page Script Isolation:** All mapping dictionaries, NER lookup tables, and the Review-Before-Send UI execute in the extension's `ISOLATED` world and background Service Worker. The review panel uses a closed Shadow DOM (`host.attachShadow({ mode: 'closed' })`), ensuring `host.shadowRoot === null` to page scripts.
+- **Restored DOM Visibility (Inherent Boundary):** Restored text nodes in the assistant response live directly in the page DOM so the user can read the output. Consequently, page scripts running on the target origin (e.g., ChatGPT or Claude frontend JavaScript) CAN read restored values once rendered in the DOM. This is an inherent property of in-browser client-side restoration.
+- **Storage & Cryptographic Boundaries:**
+  - Ephemeral session mappings reside in memory-backed `chrome.storage.session` and are purged on browser exit.
+  - Optional persistence uses AES-GCM 256-bit keys with `extractable: false` via WebCrypto API.
+  - *Threat Model Scope:* WebCrypto prevents scripts from exporting the raw key material and protects local records against casual storage dumps. However, because keys (IndexedDB) and ciphertexts (`chrome.storage.local`) reside in the same browser profile directory, this DOES NOT protect against an attacker with read access to the browser's profile directory on disk, nor against malware with browser process memory inspection capabilities.
+- **Custom-Rule Safety & Input Length Cap:** User-defined regex rules are restricted to a ReDoS-safe linear-time subset (no nested repetition, no overlapping adjacent wildcards, no repeated alternations) and capped at 200 characters to prevent background worker denial of service.
+
+### 1.6 System Defaults & Configuration Reference
+- **Global Shield:** `enabled = true`
+- **Detection Sensitivity:** `sensitivity = 'medium'` (threshold: 0.65; low = 0.85, high = 0.45)
+- **Supported Sites:** `enabledSites = { chatgpt: true, claude: true }` (Gemini is not supported yet and excluded from matches/permissions)
+- **Review Before Sending:** `reviewBeforeSend = true` (default on for supported sites)
+- **Review Timeout:** `reviewTimeoutSeconds = 60` (fail-closed timeout countdown)
+- **Review Sites:** `reviewSites = { chatgpt: true, claude: true, mock: false }`
+- **Persistence:** `enablePersistence = false` (session-only by default)
+- **Persistence TTL:** `persistenceExpiryHours = 24`
+- **Protected Entity Toggles:** All 14 built-in categories enabled by default (`EMAIL`, `PHONE`, `API_KEY`, `CREDIT_CARD`, `SSN`, `CNIC`, `IPV4`, `IPV6`, `MAC_ADDRESS`, `URL_WITH_CREDS`, `DATE_OF_BIRTH`, `PERSON`, `ORG`, `LOCATION`)
+- **Custom Rules:** `customRules = []` (max 200 chars per regex pattern)
+- **Power Mode:** `powerMode = false`
+
 ---
 
 ## 2. Stage Delivery Summary

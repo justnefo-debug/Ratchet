@@ -121,28 +121,44 @@ const Popup = () => {
       {/* Per-Site Control */}
       {currentDomain && currentSiteKey && (
         <div style={{ background: '#1e293b', padding: '12px', borderRadius: '6px', border: '1px solid #334155' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '13px', fontWeight: '500' }}>Enabled on {currentDomain}</span>
-            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-              <input
-                id="site-shield-toggle"
-                type="checkbox"
-                checked={isCurrentSiteActive}
-                onChange={(e) => handleSiteToggle(e.target.checked)}
-              />
-            </label>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #334155' }}>
-            <span style={{ fontSize: '12px', color: '#cbd5e1' }}>Review before sending</span>
-            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-              <input
-                id="site-review-toggle"
-                type="checkbox"
-                checked={isCurrentSiteReviewActive}
-                onChange={(e) => handleSiteReviewToggle(e.target.checked)}
-              />
-            </label>
-          </div>
+          {currentSiteKey === 'gemini' ? (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '13px', fontWeight: '500' }}>{currentDomain}</span>
+                <span id="site-status-badge" style={{ fontSize: '11px', background: '#475569', color: '#cbd5e1', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
+                  Not Supported
+                </span>
+              </div>
+              <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#94a3b8', lineHeight: '1.4' }}>
+                Gemini adapter is not implemented yet. Prompts on this site are <strong>not protected</strong> by Ratchet.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '13px', fontWeight: '500' }}>Enabled on {currentDomain}</span>
+                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                  <input
+                    id="site-shield-toggle"
+                    type="checkbox"
+                    checked={isCurrentSiteActive}
+                    onChange={(e) => handleSiteToggle(e.target.checked)}
+                  />
+                </label>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #334155' }}>
+                <span style={{ fontSize: '12px', color: '#cbd5e1' }}>Review before sending</span>
+                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                  <input
+                    id="site-review-toggle"
+                    type="checkbox"
+                    checked={isCurrentSiteReviewActive}
+                    onChange={(e) => handleSiteReviewToggle(e.target.checked)}
+                  />
+                </label>
+              </div>
+            </>
+          )}
         </div>
       )}
 

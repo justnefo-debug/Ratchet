@@ -226,19 +226,9 @@ const Options: React.FC = () => {
                 />
               </label>
             </div>
-            <div className="entity-card">
-              <span className="entity-label">Gemini</span>
-              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                <input
-                  id="review-site-gemini"
-                  type="checkbox"
-                  checked={settings.reviewSites?.gemini !== false}
-                  onChange={(e) => {
-                    const prev = settings.reviewSites || { chatgpt: true, claude: true, gemini: true };
-                    setSettings({ ...settings, reviewSites: { ...prev, gemini: e.target.checked } });
-                  }}
-                />
-              </label>
+            <div className="entity-card" style={{ opacity: 0.6 }}>
+              <span className="entity-label">Gemini (Not Supported)</span>
+              <span style={{ fontSize: '12px', color: '#94a3b8' }}>Coming soon</span>
             </div>
           </div>
           <div className="setting-group" style={{ marginTop: '14px' }}>
@@ -302,6 +292,7 @@ const Options: React.FC = () => {
                 <input
                   id="new-rule-name"
                   type="text"
+                  maxLength={50}
                   placeholder="e.g., Internal Project Alpha"
                   value={newRuleName}
                   onChange={(e) => setNewRuleName(e.target.value)}
@@ -313,6 +304,7 @@ const Options: React.FC = () => {
                 <input
                   id="new-rule-category"
                   type="text"
+                  maxLength={30}
                   placeholder="e.g., PROJECT_ALPHA"
                   value={newRuleCategory}
                   onChange={(e) => setNewRuleCategory(e.target.value)}
@@ -335,16 +327,22 @@ const Options: React.FC = () => {
 
             <div className="form-group">
               <label htmlFor="new-rule-pattern">
-                {newRuleType === 'regex' ? 'Regular Expression' : 'Keywords (comma-separated)'}
+                {newRuleType === 'regex' ? 'Regular Expression (max 200 characters, ReDoS-safe subset)' : 'Keywords (comma-separated)'}
               </label>
               <input
                 id="new-rule-pattern"
                 type="text"
+                maxLength={200}
                 placeholder={newRuleType === 'regex' ? 'e.g., PRJ-[A-Z0-9]{4,8}' : 'e.g., SecretProject, CodeName'}
                 value={newRulePattern}
                 onChange={(e) => setNewRulePattern(e.target.value)}
                 className="text-input"
               />
+              {newRuleType === 'regex' && (
+                <p className="help-text" style={{ fontSize: '11px', color: '#94a3b8', marginTop: '3px' }}>
+                  Enforces ReDoS-safe subset: no nested repetition, no overlapping adjacent wildcards, 200-char max length limit.
+                </p>
+              )}
             </div>
 
             {/* Validation Feedback */}

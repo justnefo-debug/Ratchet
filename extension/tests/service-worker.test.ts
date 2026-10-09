@@ -194,7 +194,7 @@ describe('Service Worker & Session Storage Mapping Pipeline', () => {
     expect(isSiteEnabled('https://chatgpt.com', enabledSites)).toBe(true);
     expect(isSiteEnabled('https://chat.openai.com', enabledSites)).toBe(true);
     expect(isSiteEnabled('https://claude.ai', enabledSites)).toBe(false);
-    expect(isSiteEnabled('https://gemini.google.com', enabledSites)).toBe(true);
+    expect(isSiteEnabled('https://gemini.google.com', enabledSites)).toBe(false); // unsupported
     expect(isSiteEnabled('http://localhost:3000', enabledSites)).toBe(true);
     expect(isSiteEnabled('http://127.0.0.1:8080', enabledSites)).toBe(true);
   });

@@ -59,7 +59,7 @@ export interface RatchetSettings {
   enabledSites: {
     chatgpt: boolean;
     claude: boolean;
-    gemini: boolean;
+    gemini?: boolean;
     mock?: boolean;
   };
   reviewBeforeSend?: boolean;
@@ -67,7 +67,7 @@ export interface RatchetSettings {
   reviewSites?: {
     chatgpt: boolean;
     claude: boolean;
-    gemini: boolean;
+    gemini?: boolean;
     mock?: boolean;
   };
   enablePersistence: boolean;

@@ -12,12 +12,22 @@ export interface ReDoSValidationResult {
   executionTimeMs?: number;
 }
 
+export const MAX_REGEX_PATTERN_LENGTH = 200;
+
 /**
  * Validates a regex pattern against syntax errors and catastrophic backtracking (ReDoS).
  */
 export function validateRegexSafety(pattern: string): ReDoSValidationResult {
   if (!pattern || pattern.trim() === '') {
     return { valid: false, error: 'Pattern cannot be empty' };
+  }
+
+  // Length cap check
+  if (pattern.length > MAX_REGEX_PATTERN_LENGTH) {
+    return {
+      valid: false,
+      error: `Pattern rejected: length exceeds ${MAX_REGEX_PATTERN_LENGTH} character limit (${pattern.length} chars)`,
+    };
   }
 
   // 1. Syntax check
