@@ -11,9 +11,7 @@
   "host_permissions": [
     "https://chatgpt.com/*",
     "https://claude.ai/*",
-    "https://gemini.google.com/*",
-    "http://localhost:5000/*",
-    "http://127.0.0.1:5000/*"
+    "https://gemini.google.com/*"
   ],
   "action": {
     "default_popup": "src/popup/popup.html",
@@ -34,7 +32,18 @@
         "https://claude.ai/*",
         "https://gemini.google.com/*"
       ],
+      "js": ["assets/interceptor-main.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*"
+      ],
       "js": ["assets/content.js"],
+      "world": "ISOLATED",
       "run_at": "document_end"
     }
   ]
