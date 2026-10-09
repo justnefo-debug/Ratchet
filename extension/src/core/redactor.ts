@@ -14,6 +14,34 @@ export interface RedactionResult {
 }
 
 /**
+ * Deduplicate overlapping entity intervals.
+ * Prioritizes earlier start index, then longer match length, then higher confidence.
+ */
+export function deduplicateOverlaps(entities: DetectedEntity[]): DetectedEntity[] {
+  if (entities.length <= 1) return [...entities];
+
+  const sorted = [...entities].sort((a, b) => {
+    if (a.start !== b.start) return a.start - b.start;
+    const lenA = a.end - a.start;
+    const lenB = b.end - b.start;
+    if (lenA !== lenB) return lenB - lenA;
+    return b.confidence - a.confidence;
+  });
+
+  const filtered: DetectedEntity[] = [];
+  let lastEnd = -1;
+
+  for (const ent of sorted) {
+    if (ent.start >= lastEnd) {
+      filtered.push(ent);
+      lastEnd = ent.end;
+    }
+  }
+
+  return filtered;
+}
+
+/**
  * Redact all `entities` in `text`, returning the sanitised text and the
  * placeholder → original mapping needed for restoration.
  *
@@ -26,7 +54,8 @@ export function redact(
   entities: DetectedEntity[],
   existingMappings: MappingEntry[] = [],
 ): RedactionResult {
-  if (entities.length === 0) {
+  const cleanEntities = deduplicateOverlaps(entities);
+  if (cleanEntities.length === 0) {
     return { redactedText: text, mappings: [...existingMappings] };
   }
 
@@ -45,7 +74,7 @@ export function redact(
   }
 
   // Sort entities left-to-right by start index
-  const sorted = [...entities].sort((a, b) => a.start - b.start);
+  const sorted = [...cleanEntities].sort((a, b) => a.start - b.start);
 
   // Assign placeholders (left-to-right for stable numbering)
   const assignments: Array<{

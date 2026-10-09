@@ -2,12 +2,12 @@
  * Ratchet Privacy Shield — Regex-Based PII Detector
  *
  * Port of backend/detectors/regex_detector.py to TypeScript.
- * Pre-compiled patterns for performance.
+ * Pre-compiled patterns for performance with ReDoS protection.
  */
 
 import type { DetectedEntity } from '../shared/types';
 
-interface PatternDef {
+export interface PatternDef {
   regex: RegExp;
   confidence: number;
   validate?: (match: string) => boolean;
@@ -16,10 +16,12 @@ interface PatternDef {
 // ─── Validation Helpers ──────────────────────────────────────────
 
 /** Luhn algorithm for credit-card validation. */
-function luhnCheck(cardNumber: string): boolean {
-  const digits = cardNumber.replace(/\D/g, '').split('').map(Number);
-  if (digits.length < 13 || digits.length > 19) return false;
+export function luhnCheck(cardNumber: string): boolean {
+  if (typeof cardNumber !== 'string') return false;
+  const digitsOnly = cardNumber.replace(/\D/g, '');
+  if (digitsOnly.length < 13 || digitsOnly.length > 19) return false;
 
+  const digits = digitsOnly.split('').map(Number);
   let checksum = 0;
   const reversed = [...digits].reverse();
   for (let i = 0; i < reversed.length; i++) {
@@ -33,8 +35,13 @@ function luhnCheck(cardNumber: string): boolean {
   return checksum % 10 === 0;
 }
 
-function isValidIPv4(ip: string): boolean {
-  return ip.split('.').every((p) => {
+/** IPv4 octet validation. */
+export function isValidIPv4(ip: string): boolean {
+  if (typeof ip !== 'string') return false;
+  const parts = ip.split('.');
+  if (parts.length !== 4) return false;
+  return parts.every((p) => {
+    if (!/^\d{1,3}$/.test(p)) return false;
     const n = Number(p);
     return n >= 0 && n <= 255;
   });
@@ -42,9 +49,10 @@ function isValidIPv4(ip: string): boolean {
 
 // ─── Pattern Definitions ─────────────────────────────────────────
 
-const PATTERNS: Record<string, PatternDef> = {
+export const PATTERNS: Record<string, PatternDef> = {
   EMAIL: {
-    regex: /\b[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+\b/g,
+    // RFC 5321 length bounded to prevent polynomial backtracking on adversarial input
+    regex: /\b[a-zA-Z0-9_.+-]{1,64}@[a-zA-Z0-9-]{1,63}(?:\.[a-zA-Z0-9-]{1,63})+\b/g,
     confidence: 0.95,
   },
   PHONE: {
@@ -82,7 +90,7 @@ const PATTERNS: Record<string, PatternDef> = {
     confidence: 0.95,
   },
   URL_WITH_CREDS: {
-    regex: /https?:\/\/\w+:\w+@[^\s]+/g,
+    regex: /https?:\/\/[a-zA-Z0-9_.-]{1,64}:[^@\s]{1,128}@[^\s]+/g,
     confidence: 0.99,
   },
   DATE_OF_BIRTH: {
@@ -102,7 +110,7 @@ export function detectWithRegex(text: string): DetectedEntity[] {
   const entities: DetectedEntity[] = [];
 
   for (const [typeName, def] of Object.entries(PATTERNS)) {
-    // Clone the regex to reset lastIndex for each call
+    // Clone regex to reset lastIndex
     const re = new RegExp(def.regex.source, def.regex.flags);
     let match: RegExpExecArray | null;
 
