@@ -1,31 +1,42 @@
 # NOTICE — Lexicon Data Provenance & Attributions
 
-Ratchet bundles an offline, zero-network pre-indexed Radix-Trie lexicon for named entity detection (`src/detectors/gazetteer-data.json`, 22.5 KB).
+Ratchet bundles an offline, zero-network pre-indexed Radix-Trie lexicon for named entity detection (`src/detectors/gazetteer-data.json`, ~527 KB, < 3 MB budget).
 
 ---
 
 ## 1. Data Provenance & Category Counts
 
-The bundled gazetteer contains a total of **524 hand-curated seed entries** across four categories:
+The expanded gazetteer contains a total of **13,020 curated entries** across four categories:
 
-| Category | Entry Count | Provenance & Selection Method |
-| :--- | :---: | :--- |
-| **First Names** (`FIRST_NAME`) | **159** | Hand-curated list of common given names across South Asian, Middle Eastern, East Asian, African, and Western demographics. |
-| **Last Names** (`LAST_NAME`) | **149** | Hand-curated list of common surnames across South Asian, Middle Eastern, East Asian, African, and Western demographics. |
-| **Organizations** (`ORG`) | **99** | Hand-curated list of prominent technology firms, financial institutions, consulting firms, research universities, and multilateral agencies. |
-| **Locations** (`LOCATION`) | **117** | Hand-curated list of major sovereign nations and global metropolitan tech/commercial hubs. |
-
-**Clarification on External Corpora:**
-Earlier project documentation referenced bulk external datasets (US Census Bureau, GeoNames, Natural Earth, SEC EDGAR, and Wikidata). No automated bulk ingestion or dataset downloads were performed for this bundle. All entries were assembled directly by hand in `scripts/build-trie.mjs` to keep the extension footprint small (~22.5 KB JSON, ~4.5 MB in-memory heap) and preserve zero-network operation.
+| Category | Entry Count | Provenance & Sources | License |
+| :--- | :---: | :--- | :--- |
+| **First Names** (`FIRST_NAME`) | **3,700** | Social Security Administration (SSA) popular given names + Wikidata multilingual given names (South Asian, East Asian, Middle Eastern, African) + hand-curated seeds. | Public Domain (US Gov) / CC0 1.0 (Wikidata) |
+| **Last Names** (`LAST_NAME`) | **3,680** | US Census Bureau 2010 Frequently Occurring Surnames (with boosted representation for Asian/Pacific Islander and Hispanic demographics) + Wikidata multilingual surnames + hand-curated seeds. | Public Domain (US Gov) / CC0 1.0 (Wikidata) |
+| **Organizations** (`ORG`) | **2,582** | SEC EDGAR public company directory & tickers + prominent tech, finance, consulting, multilateral, and university institutions. | Public Domain (US Gov) / CC0 1.0 |
+| **Locations** (`LOCATION`) | **3,058** | GeoNames global metropolitan cities with population > 15,000 (`cities15000.txt`) + sovereign nations and tech hubs. | Creative Commons Attribution 4.0 International (CC BY 4.0) |
 
 ---
 
-## 2. Licensing
+## 2. Licensing & Attributions
 
-The hand-curated lists consist of factual entity names and common vocabulary terms. The compiled lists and trie generation code are dedicated to the public domain under **CC0 1.0 Universal (Public Domain Dedication)**, with no third-party copyright restrictions.
+### A. GeoNames
+This product includes geographical data sourced from GeoNames (http://www.geonames.org), licensed under the Creative Commons Attribution 4.0 International License:
+```
+GeoNames (www.geonames.org)
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+```
 
+### B. United States Federal Government Data
+- **US Census Bureau 2010 Surnames**: U.S. Census Bureau, Population Division. Work of the United States Government under 17 U.S.C. § 105; dedicated to the Public Domain.
+- **Social Security Administration (SSA) Popular Baby Names**: Social Security Administration, Office of the Chief Actuary. Work of the United States Government; dedicated to the Public Domain.
+- **U.S. Securities and Exchange Commission (SEC) EDGAR**: Company tickers and metadata. Work of the United States Government; dedicated to the Public Domain.
+
+### C. Wikidata Multilingual Entities & Curated Seeds
+Multilingual name entities extracted from Wikidata and hand-curated seeds are dedicated under the Creative Commons CC0 1.0 Universal Public Domain Dedication:
 ```
 Creative Commons Legal Code
 CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
 https://creativecommons.org/publicdomain/zero/1.0/
 ```
+All trie compilation, filtering, and indexing scripts are open source under the MIT License.

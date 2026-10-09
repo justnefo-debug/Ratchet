@@ -252,4 +252,66 @@ describe('Gazetteer & Context Rule NER Detector', () => {
     // Restore original
     setNerBackend(original);
   });
+
+  it('verifies expanded gazetteer meets < 3 MB size budget', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const triePath = path.resolve(__dirname, '../src/detectors/gazetteer-data.json');
+    const stats = fs.statSync(triePath);
+    const sizeBytes = stats.size;
+    const sizeMB = sizeBytes / (1024 * 1024);
+
+    expect(sizeMB).toBeLessThan(3.0);
+    expect(sizeBytes).toBeGreaterThan(100 * 1024); // Confirms expanded beyond tiny seed list
+  });
+
+  it('achieves 0% False Positive Rate across 30 benign prompts', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const { detectWithNer } = await import('../src/detectors/ner-detector');
+
+    const benignPath = path.resolve(__dirname, 'data/benign-prompts.json');
+    const benignPrompts: Array<{ id: string; text: string }> = JSON.parse(
+      fs.readFileSync(benignPath, 'utf8'),
+    );
+
+    expect(benignPrompts.length).toBe(30);
+
+    const falsePositives: Array<{ id: string; text: string; detected: string[] }> = [];
+    for (const prompt of benignPrompts) {
+      const entities = await detectWithNer(prompt.text, { sensitivity: 'medium' });
+      if (entities.length > 0) {
+        falsePositives.push({
+          id: prompt.id,
+          text: prompt.text,
+          detected: entities.map((e) => e.value),
+        });
+      }
+    }
+
+    expect(falsePositives, `Benign prompts must have 0 false positives: ${JSON.stringify(falsePositives)}`).toHaveLength(0);
+  });
+
+  it('evaluates unknown entities on 0% overlap held-out set and captures out-of-vocabulary entities via context rules', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const { detectWithNer } = await import('../src/detectors/ner-detector');
+
+    const unkPath = path.resolve(__dirname, 'data/unknown-entities-eval.json');
+    const unkPrompts: Array<{ id: string; text: string; entities: Array<{ text: string; category: string }> }> =
+      JSON.parse(fs.readFileSync(unkPath, 'utf8'));
+
+    expect(unkPrompts.length).toBe(34);
+
+    let highSensitivityHits = 0;
+    for (const prompt of unkPrompts) {
+      const entities = await detectWithNer(prompt.text, { sensitivity: 'high' });
+      if (entities.length > 0) {
+        highSensitivityHits++;
+      }
+    }
+
+    // High sensitivity context rules should successfully detect out-of-vocabulary entities
+    expect(highSensitivityHits).toBeGreaterThanOrEqual(10);
+  });
 });

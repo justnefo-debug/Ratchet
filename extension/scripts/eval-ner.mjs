@@ -460,6 +460,31 @@ if (customFilePath) {
   console.log(`    [Breakdown: PERSON: ${resUnkMedium.person.recall}, ORG: ${resUnkMedium.org.recall}, LOCATION: ${resUnkMedium.loc.recall}]`);
   console.log(`  - High Sensitivity Recall:   ${resUnkHigh.overall.recall} (TP: ${resUnkHigh.overall.tp}/${unkTotalEntities}, FP: ${resUnkHigh.overall.fp})`);
   console.log(`    [Breakdown: PERSON: ${resUnkHigh.person.recall}, ORG: ${resUnkHigh.org.recall}, LOCATION: ${resUnkHigh.loc.recall}]`);
+
+  // 30 Benign Prompts False Positive Rate (FPR) Evaluation
+  const benignPath = path.resolve(__dirname, '../tests/data/benign-prompts.json');
+  if (fs.existsSync(benignPath)) {
+    const benignPrompts = JSON.parse(fs.readFileSync(benignPath, 'utf8'));
+    let fpCount = 0;
+    const fpDetails = [];
+    for (const p of benignPrompts) {
+      const res = detectEntities(p.text, 'medium');
+      if (res.length > 0) {
+        fpCount += res.length;
+        fpDetails.push({ id: p.id, entities: res.map((r) => r.value) });
+      }
+    }
+    const fpr = (fpDetails.length / benignPrompts.length) * 100;
+    console.log(`\nEvaluation on 30 Benign Prompts (False Positive Rate):`);
+    console.log(`  - Total Benign Prompts: ${benignPrompts.length}`);
+    console.log(`  - Prompts with Spurious Redactions: ${fpDetails.length} (FPR: ${fpr.toFixed(1)}%)`);
+    console.log(`  - Total False Positive Entities: ${fpCount}`);
+    if (fpDetails.length > 0) {
+      console.log(`  - Spurious entities:`, JSON.stringify(fpDetails, null, 2));
+    } else {
+      console.log(`  - ✓ Zero false positives across all 30 benign technical/coding prompts (0.0% FPR).`);
+    }
+  }
 }
 
 console.log('======================================================\n');

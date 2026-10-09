@@ -36,3 +36,7 @@ venv/
 __pycache__/
 *.pyc
 *.pyo
+
+# Raw dataset archives
+data/downloads/
+extension/data/downloads/
