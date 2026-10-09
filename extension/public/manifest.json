@@ -13,7 +13,8 @@
     "https://chat.openai.com/*",
     "https://claude.ai/*",
     "https://gemini.google.com/*",
-    "<all_urls>"
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ],
   "action": {
     "default_popup": "src/popup/popup.html",
@@ -34,7 +35,8 @@
         "https://chat.openai.com/*",
         "https://claude.ai/*",
         "https://gemini.google.com/*",
-        "<all_urls>"
+        "http://localhost/*",
+        "http://127.0.0.1/*"
       ],
       "js": ["assets/interceptor-main.js"],
       "world": "MAIN",
@@ -46,7 +48,8 @@
         "https://chat.openai.com/*",
         "https://claude.ai/*",
         "https://gemini.google.com/*",
-        "<all_urls>"
+        "http://localhost/*",
+        "http://127.0.0.1/*"
       ],
       "js": ["assets/content.js"],
       "world": "ISOLATED",

@@ -150,6 +150,22 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
     expect(domText2).toContain(emailBob);
     expect(domText2).not.toContain('«EMAIL_1»');
     expect(domText2).not.toContain('«EMAIL_2»');
+
+    // Requirement Stage 4.1: Restores user message containers too (e.g. reloaded history)
+    await page.evaluate(() => {
+      (window as any).simulateReloadHistory('Past turn: User previously asked about «EMAIL_1» and key «API_KEY_1»');
+    });
+
+    const userHistory = page.locator('.user-message').last();
+    await expect(userHistory).toBeVisible();
+    await expect(userHistory).toContainText(emailAlice);
+    await expect(userHistory).toContainText(apiKeyAlice);
+    await expect(userHistory).not.toContainText('«EMAIL_1»');
+    await expect(userHistory).not.toContainText('«API_KEY_1»');
+
+    // Ensure input box is NEVER rewritten or touched
+    await page.locator('#prompt-textarea').fill('Draft containing literal «EMAIL_1»');
+    await expect(page.locator('#prompt-textarea')).toHaveValue('Draft containing literal «EMAIL_1»');
   });
 
   // ─── Test 4: Service Worker Restart / Suspension Resilience ───────────────

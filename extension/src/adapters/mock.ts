@@ -80,7 +80,9 @@ export class MockSiteAdapter implements SiteAdapter {
   getMessageSelectors(): string[] {
     return [
       '.assistant-message',
+      '.user-message',
       '[data-role="assistant"]',
+      '[data-role="user"]',
       '.chat-response',
     ];
   }

@@ -118,6 +118,8 @@ export class ClaudeAdapter implements SiteAdapter {
     return [
       '[data-is-streaming]',
       '.font-claude-message',
+      '.font-user-message',
+      'div[data-testid="user-message"]',
       'div[data-test-render-count]',
       '.standard-markdown',
       'div[class*="ChatMessage"]',

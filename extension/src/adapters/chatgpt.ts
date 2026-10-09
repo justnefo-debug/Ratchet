@@ -88,7 +88,9 @@ export class ChatGPTAdapter implements SiteAdapter {
   getMessageSelectors(): string[] {
     return [
       '[data-message-author-role="assistant"]',
+      '[data-message-author-role="user"]',
       '.agent-turn',
+      '.user-turn',
       '.markdown',
       'div[data-testid^="conversation-turn-"]',
     ];

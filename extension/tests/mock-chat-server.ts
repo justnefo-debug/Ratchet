@@ -215,6 +215,14 @@ export class MockChatServer {
       status.textContent = 'Sending...';
 
       const container = document.getElementById('messages-container');
+
+      // User message container
+      const userMsg = document.createElement('div');
+      userMsg.className = 'user-message';
+      userMsg.setAttribute('data-role', 'user');
+      userMsg.textContent = promptText;
+      container.appendChild(userMsg);
+
       const msgDiv = document.createElement('div');
       msgDiv.className = 'chat-response assistant-message';
       msgDiv.setAttribute('data-role', 'assistant');
@@ -298,6 +306,17 @@ export class MockChatServer {
       ed.innerText = '';
       executePrompt(val);
     });
+
+    window.simulateReloadHistory = function(historyText) {
+      const container = document.getElementById('messages-container');
+      const userDiv = document.createElement('div');
+      userDiv.className = 'user-message';
+      userDiv.setAttribute('data-role', 'user');
+      const p = document.createElement('p');
+      p.textContent = historyText;
+      userDiv.appendChild(p);
+      container.appendChild(userDiv);
+    };
   </script>
 </body>
 </html>`;

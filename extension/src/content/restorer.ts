@@ -135,6 +135,9 @@ export class ContentRestorer {
     if (tag === 'textarea' || tag === 'input') return true;
     if (element.getAttribute('contenteditable') === 'true') return true;
     if ((element as HTMLElement).isContentEditable) return true;
+    if (element.closest && element.closest('textarea, input, [contenteditable="true"]')) {
+      return true;
+    }
     return false;
   }
 
