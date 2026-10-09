@@ -177,3 +177,79 @@ describe('Custom Rules Detector', () => {
     expect(entities.some((e) => e.value === 'Confidential')).toBe(false);
   });
 });
+
+describe('Gazetteer & Context Rule NER Detector', () => {
+  it('detects diverse global names, organizations, and locations', async () => {
+    const { detectWithNer } = await import('../src/detectors/ner-detector');
+
+    const text = 'Dr. Tariq Mehmood met with Sarah Jenkins and Sundar Pichai at OpenAI in Tokyo.';
+    const entities = await detectWithNer(text);
+
+    expect(entities.some((e) => e.type === 'PERSON' && e.value.includes('Tariq Mehmood'))).toBe(true);
+    expect(entities.some((e) => e.type === 'PERSON' && e.value.includes('Sarah Jenkins'))).toBe(true);
+    expect(entities.some((e) => e.type === 'PERSON' && e.value.includes('Sundar Pichai'))).toBe(true);
+    expect(entities.some((e) => e.type === 'ORG' && e.value === 'OpenAI')).toBe(true);
+    expect(entities.some((e) => e.type === 'LOCATION' && e.value === 'Tokyo')).toBe(true);
+  });
+
+  it('respects sensitivity mapping: low requires context cue, high captures multi-word proper nouns', async () => {
+    const { detectWithNer } = await import('../src/detectors/ner-detector');
+
+    // "Tariq Mehmood" has first + last name in gazetteer.
+    // "Acme Corp" has org suffix cue.
+    // "UnkownPerson MysteryName" is not in gazetteer and not sentence-initial.
+    const text = 'Tariq Mehmood visited Acme Corp, and later UnkownPerson MysteryName attended the lecture.';
+
+    const lowEntities = await detectWithNer(text, { sensitivity: 'low' });
+    expect(lowEntities.some((e) => e.type === 'ORG' && e.value.includes('Acme Corp'))).toBe(true);
+
+    const highEntities = await detectWithNer(text, { sensitivity: 'high' });
+    expect(highEntities.some((e) => e.value.includes('UnkownPerson MysteryName'))).toBe(true);
+  });
+
+  it('filters out code identifiers and file paths', async () => {
+    const { detectWithNer } = await import('../src/detectors/ner-detector');
+
+    const text = 'const userId = getUserProfile(targetId); and log at C:\\Users\\Alice\\Documents\\app.log';
+    const entities = await detectWithNer(text);
+
+    expect(entities.some((e) => e.value === 'userId')).toBe(false);
+    expect(entities.some((e) => e.value === 'getUserProfile')).toBe(false);
+    expect(entities.some((e) => e.value === 'Alice')).toBe(false);
+  });
+
+  it('filters out sentence-initial words', async () => {
+    const { detectWithNer } = await import('../src/detectors/ner-detector');
+
+    const text = 'However, the system worked. Because of the updates, we succeeded.';
+    const entities = await detectWithNer(text);
+
+    expect(entities.some((e) => e.value === 'However')).toBe(false);
+    expect(entities.some((e) => e.value === 'Because')).toBe(false);
+  });
+
+  it('allows swapping NerBackend via pluggable interface', async () => {
+    const { detectWithNer, setNerBackend, getNerBackend } = await import('../src/detectors/ner-detector');
+    const original = getNerBackend();
+
+    const mockBackend = {
+      name: 'mock-test-backend',
+      detect: async () => [{
+        type: 'PERSON',
+        value: 'Mock Person',
+        start: 0,
+        end: 11,
+        confidence: 0.99,
+        source: 'ner' as const,
+      }],
+    };
+
+    setNerBackend(mockBackend);
+    const results = await detectWithNer('Hello world');
+    expect(results.length).toBe(1);
+    expect(results[0].value).toBe('Mock Person');
+
+    // Restore original
+    setNerBackend(original);
+  });
+});

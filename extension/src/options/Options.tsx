@@ -16,6 +16,9 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   MAC_ADDRESS: 'MAC Addresses',
   URL_WITH_CREDS: 'URLs with Embedded Passwords',
   DATE_OF_BIRTH: 'Dates of Birth',
+  PERSON: 'People & Names (PERSON)',
+  ORG: 'Organizations & Companies (ORG)',
+  LOCATION: 'Locations & Cities (LOCATION)',
 };
 
 const Options: React.FC = () => {
@@ -181,6 +184,9 @@ const Options: React.FC = () => {
         <section className="settings-section">
           <h2>Protected Entity Types</h2>
           <p className="help-text">Toggle which types of sensitive information are intercepted and redacted.</p>
+          <p className="help-text" style={{ color: '#fbbf24', marginTop: '4px' }}>
+            ℹ️ Note: Name, organization, and location detection is best-effort and will miss some entities.
+          </p>
 
           <div className="entity-grid">
             {Object.entries(ENTITY_TYPE_LABELS).map(([typeKey, label]) => {

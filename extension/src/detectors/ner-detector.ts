@@ -1,13 +1,28 @@
 /**
- * Ratchet Privacy Shield — Named Entity Recognition Detector (Tier 2 Stub)
+ * Ratchet Privacy Shield — Named Entity Recognition Detector
  *
- * Interface for model-based NER. In future phases, this will be powered
- * by a lightweight quantized ONNX model running in an offscreen document.
+ * Dispatches to an active NerBackend (defaulting to GazetteerRuleNerBackend).
+ * Pluggable architecture allows seamless upgrade to future model-based backends
+ * without changing callers or service-worker interfaces.
  */
 
 import type { DetectedEntity } from '../shared/types';
+import type { NerBackend, NerBackendOptions } from './ner-backend';
+import { GazetteerRuleNerBackend } from './gazetteer-ner-backend';
 
-export async function detectWithNer(_text: string): Promise<DetectedEntity[]> {
-  // Stub interface for Tier 2 NER
-  return [];
+let activeBackend: NerBackend = new GazetteerRuleNerBackend();
+
+export function setNerBackend(backend: NerBackend): void {
+  activeBackend = backend;
+}
+
+export function getNerBackend(): NerBackend {
+  return activeBackend;
+}
+
+export async function detectWithNer(
+  text: string,
+  options?: NerBackendOptions
+): Promise<DetectedEntity[]> {
+  return activeBackend.detect(text, options);
 }

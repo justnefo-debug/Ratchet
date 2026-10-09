@@ -4,8 +4,9 @@
   "description": "Ratchet Privacy Shield Chrome Extension",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "build:test": "tsc && vite build --mode test",
+    "build:trie": "node scripts/build-trie.mjs",
+    "build": "npm run build:trie && tsc && vite build",
+    "build:test": "npm run build:trie && tsc && vite build --mode test",
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test"

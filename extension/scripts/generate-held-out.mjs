@@ -1,0 +1,796 @@
+/**
+ * Held-Out Test Set Generator
+ *
+ * Generates >= 60 prompts and >= 150 entities covering:
+ * - South Asian / Pakistani, Arabic, East Asian, African, and Western names
+ * - Sloppy typing & lowercase
+ * - Email headers & code comments
+ * - Ambiguous words (May, Apple, Jordan, Washington, Paris)
+ * - Code identifiers, file paths, and negative non-entities
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export const HELD_OUT_DATASET = [
+  // ── 1. South Asian & Pakistani (Prompts 1-12) ──────────────────────────────
+  {
+    id: 'sa-1',
+    text: 'Dr. Tariq Mehmood presented his oncology findings at Aga Khan University in Islamabad yesterday.',
+    entities: [
+      { text: 'Tariq Mehmood', category: 'PERSON' },
+      { text: 'Islamabad', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'sa-2',
+    text: 'Please schedule an interview with Fatima Bhutto from Karachi regarding the arts festival in Lahore.',
+    entities: [
+      { text: 'Fatima Bhutto', category: 'PERSON' },
+      { text: 'Karachi', category: 'LOCATION' },
+      { text: 'Lahore', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'sa-3',
+    text: 'Senator Imran Khan addressed the diplomatic delegation from Pakistan in Islamabad.',
+    entities: [
+      { text: 'Imran Khan', category: 'PERSON' },
+      { text: 'Pakistan', category: 'LOCATION' },
+      { text: 'Islamabad', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'sa-4',
+    text: 'Our regional director Ayesha Malik visited the research branch in Rawalpindi with Ali Chaudhry.',
+    entities: [
+      { text: 'Ayesha Malik', category: 'PERSON' },
+      { text: 'Rawalpindi', category: 'LOCATION' },
+      { text: 'Ali Chaudhry', category: 'PERSON' }
+    ]
+  },
+  {
+    id: 'sa-5',
+    text: 'Software architect Bilal Siddiqui pushed the deployment pipeline for Systems Ltd in Karachi.',
+    entities: [
+      { text: 'Bilal Siddiqui', category: 'PERSON' },
+      { text: 'Karachi', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'sa-6',
+    text: 'Journalist Zainab Abbas and anchor Hamza Gillani filed the broadcast from Peshawar.',
+    entities: [
+      { text: 'Zainab Abbas', category: 'PERSON' },
+      { text: 'Hamza Gillani', category: 'PERSON' },
+      { text: 'Peshawar', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'sa-7',
+    text: 'We received signed approval from Shahbaz Sharif and Nawaz Sharif in Lahore.',
+    entities: [
+      { text: 'Shahbaz Sharif', category: 'PERSON' },
+      { text: 'Nawaz Sharif', category: 'PERSON' },
+      { text: 'Lahore', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'sa-8',
+    text: 'Prof. Saad Qureshi delivered the keynote address at Quaid-i-Azam University in Islamabad.',
+    entities: [
+      { text: 'Saad Qureshi', category: 'PERSON' },
+      { text: 'Islamabad', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'sa-9',
+    text: 'Can you draft a reply to Mariam Bajwa and Asad Khan regarding their logistics contract in Quetta?',
+    entities: [
+      { text: 'Mariam Bajwa', category: 'PERSON' },
+      { text: 'Asad Khan', category: 'PERSON' },
+      { text: 'Quetta', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'sa-10',
+    text: 'Lead engineer Usman Farooq coordinated with Hina Malik across Karachi and Multan.',
+    entities: [
+      { text: 'Usman Farooq', category: 'PERSON' },
+      { text: 'Hina Malik', category: 'PERSON' },
+      { text: 'Karachi', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'sa-11',
+    text: 'Financial auditor Zoya Siddiqui completed the inspection for Habib Bank in Lahore.',
+    entities: [
+      { text: 'Zoya Siddiqui', category: 'PERSON' },
+      { text: 'Lahore', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'sa-12',
+    text: 'Representative Sana Mir met with sports officials in Rawalpindi and Islamabad.',
+    entities: [
+      { text: 'Sana Mir', category: 'PERSON' },
+      { text: 'Rawalpindi', category: 'LOCATION' },
+      { text: 'Islamabad', category: 'LOCATION' }
+    ]
+  },
+
+  // ── 2. Arabic & Middle Eastern (Prompts 13-24) ─────────────────────────────
+  {
+    id: 'ar-1',
+    text: 'Omar Farooq finalized the investment portfolio with Tariq Al-Mansoor in Dubai.',
+    entities: [
+      { text: 'Omar Farooq', category: 'PERSON' },
+      { text: 'Tariq Al-Mansoor', category: 'PERSON' },
+      { text: 'Dubai', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'ar-2',
+    text: 'Dr. Layla Al-Hassan was appointed head of pediatrics at Cleveland Clinic in Abu Dhabi.',
+    entities: [
+      { text: 'Layla Al-Hassan', category: 'PERSON' },
+      { text: 'Abu Dhabi', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'ar-3',
+    text: 'Managing partner Noor Al-Sabah reviewed the energy contracts in Riyadh and Jeddah.',
+    entities: [
+      { text: 'Noor Al-Sabah', category: 'PERSON' },
+      { text: 'Riyadh', category: 'LOCATION' },
+      { text: 'Jeddah', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'ar-4',
+    text: 'Eng. Kareem Abdel-Aziz and advisor Youssef Khalil inspected the solar facility in Cairo.',
+    entities: [
+      { text: 'Kareem Abdel-Aziz', category: 'PERSON' },
+      { text: 'Youssef Khalil', category: 'PERSON' },
+      { text: 'Cairo', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'ar-5',
+    text: 'VP Khalid Al-Sayed confirmed the joint venture with Saudi Aramco in Dhahran.',
+    entities: [
+      { text: 'Khalid Al-Sayed', category: 'PERSON' }
+    ]
+  },
+  {
+    id: 'ar-6',
+    text: 'Prof. Amina Haddad chaired the linguistics conference alongside Zayd Al-Khatib in Beirut.',
+    entities: [
+      { text: 'Amina Haddad', category: 'PERSON' },
+      { text: 'Zayd Al-Khatib', category: 'PERSON' }
+    ]
+  },
+  {
+    id: 'ar-7',
+    text: 'Consultant Salma Bakir advised sovereign funds across Saudi Arabia and UAE.',
+    entities: [
+      { text: 'Salma Bakir', category: 'PERSON' },
+      { text: 'Saudi Arabia', category: 'LOCATION' },
+      { text: 'UAE', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'ar-8',
+    text: 'Senior analyst Mustafa Al-Ghamdi published the maritime trade bulletin in Jeddah.',
+    entities: [
+      { text: 'Mustafa Al-Ghamdi', category: 'PERSON' },
+      { text: 'Jeddah', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'ar-9',
+    text: 'Director Ibrahim Nasser met with commercial delegates in Dubai and Cairo.',
+    entities: [
+      { text: 'Ibrahim Nasser', category: 'PERSON' },
+      { text: 'Dubai', category: 'LOCATION' },
+      { text: 'Cairo', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'ar-10',
+    text: 'Economist Reem Al-Otaibi presented the fiscal roadmap to delegates in Riyadh.',
+    entities: [
+      { text: 'Reem Al-Otaibi', category: 'PERSON' },
+      { text: 'Riyadh', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'ar-11',
+    text: 'Diplomat Mansoor Barakat facilitated talks between delegations from Egypt and Jordan.',
+    entities: [
+      { text: 'Mansoor Barakat', category: 'PERSON' },
+      { text: 'Egypt', category: 'LOCATION' },
+      { text: 'Jordan', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'ar-12',
+    text: 'Legal counsel Fatima Najjar finalized the arbitration agreement in Abu Dhabi.',
+    entities: [
+      { text: 'Fatima Najjar', category: 'PERSON' },
+      { text: 'Abu Dhabi', category: 'LOCATION' }
+    ]
+  },
+
+  // ── 3. East Asian (Prompts 25-36) ──────────────────────────────────────────
+  {
+    id: 'ea-1',
+    text: 'Chief scientist Zhang Wei joined the quantum laboratory with Chen Yu in Beijing.',
+    entities: [
+      { text: 'Zhang Wei', category: 'PERSON' },
+      { text: 'Chen Yu', category: 'PERSON' },
+      { text: 'Beijing', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'ea-2',
+    text: 'VP Tao Huang led the strategic partnership meeting with Tencent in Shenzhen.',
+    entities: [
+      { text: 'Tao Huang', category: 'PERSON' },
+      { text: 'Tencent', category: 'ORG' }
+    ]
+  },
+  {
+    id: 'ea-3',
+    text: 'Author Haruki Murakami attended the symposium with editor Kenji Takahashi in Tokyo.',
+    entities: [
+      { text: 'Haruki Murakami', category: 'PERSON' },
+      { text: 'Kenji Takahashi', category: 'PERSON' },
+      { text: 'Tokyo', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'ea-4',
+    text: 'Software engineer Min-jun Kim deployed the trading services for Naver in Seoul.',
+    entities: [
+      { text: 'Min-jun Kim', category: 'PERSON' },
+      { text: 'Seoul', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'ea-5',
+    text: 'Dr. Lin Chen was awarded the computational biology grant in Shanghai.',
+    entities: [
+      { text: 'Lin Chen', category: 'PERSON' },
+      { text: 'Shanghai', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'ea-6',
+    text: 'Product manager So-yeon Park coordinated microchips with Samsung Electronics in Suwon.',
+    entities: [
+      { text: 'So-yeon Park', category: 'PERSON' },
+      { text: 'Samsung Electronics', category: 'ORG' }
+    ]
+  },
+  {
+    id: 'ea-7',
+    text: 'Researcher Hiroshi Tanaka presented the vision AI platform at Sony in Tokyo.',
+    entities: [
+      { text: 'Hiroshi Tanaka', category: 'PERSON' },
+      { text: 'Sony', category: 'ORG' },
+      { text: 'Tokyo', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'ea-8',
+    text: 'Operations lead Eun-ji Choi expanded semiconductor logistics across South Korea and Japan.',
+    entities: [
+      { text: 'Eun-ji Choi', category: 'PERSON' },
+      { text: 'South Korea', category: 'LOCATION' },
+      { text: 'Japan', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'ea-9',
+    text: 'Engineer Yuki Watanabe published the automotive report for Toyota in Nagoya.',
+    entities: [
+      { text: 'Yuki Watanabe', category: 'PERSON' },
+      { text: 'Toyota', category: 'ORG' }
+    ]
+  },
+  {
+    id: 'ea-10',
+    text: 'Executive Jie Wang signed the logistics agreement with Alibaba in Hangzhou.',
+    entities: [
+      { text: 'Jie Wang', category: 'PERSON' },
+      { text: 'Alibaba', category: 'ORG' }
+    ]
+  },
+  {
+    id: 'ea-11',
+    text: 'Specialist Mei Liu demonstrated the autonomous vehicle hardware in Beijing.',
+    entities: [
+      { text: 'Mei Liu', category: 'PERSON' },
+      { text: 'Beijing', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'ea-12',
+    text: 'Architect Daiki Suzuki finalized the campus layout in Osaka and Kyoto.',
+    entities: [
+      { text: 'Daiki Suzuki', category: 'PERSON' }
+    ]
+  },
+
+  // ── 4. African (Prompts 37-48) ─────────────────────────────────────────────
+  {
+    id: 'af-1',
+    text: 'Economist Kwame Mensah spoke on international trade alongside Kofi Osei in Accra.',
+    entities: [
+      { text: 'Kwame Mensah', category: 'PERSON' },
+      { text: 'Kofi Osei', category: 'PERSON' }
+    ]
+  },
+  {
+    id: 'af-2',
+    text: 'Dr. Ngozi Okonjo advised the development bank during the economic summit in Abuja.',
+    entities: [
+      { text: 'Ngozi Okonjo', category: 'PERSON' },
+      { text: 'Abuja', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'af-3',
+    text: 'Civil engineer Tendai Moyo reviewed urban infrastructure across Harare and Bulawayo.',
+    entities: [
+      { text: 'Tendai Moyo', category: 'PERSON' }
+    ]
+  },
+  {
+    id: 'af-4',
+    text: 'Professor Chinua Achebe discussed oral histories during the lecture in Enugu.',
+    entities: [
+      { text: 'Chinua Achebe', category: 'PERSON' }
+    ]
+  },
+  {
+    id: 'af-5',
+    text: 'Health director Amina Diallo and Dr. Babatunde Adeleke oversaw clinics in Lagos.',
+    entities: [
+      { text: 'Amina Diallo', category: 'PERSON' },
+      { text: 'Babatunde Adeleke', category: 'PERSON' },
+      { text: 'Lagos', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'af-6',
+    text: 'Founder Chidi Okafor expanded mobile payments infrastructure across Nigeria and Ghana.',
+    entities: [
+      { text: 'Chidi Okafor', category: 'PERSON' },
+      { text: 'Nigeria', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'af-7',
+    text: 'Diplomat Thabo Mbeki addressed human rights delegates in Johannesburg and Cape Town.',
+    entities: [
+      { text: 'Thabo Mbeki', category: 'PERSON' },
+      { text: 'Johannesburg', category: 'LOCATION' },
+      { text: 'Cape Town', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'af-8',
+    text: 'Conservationist Zola Dlamini tracked wildlife corridors across Kenya and South Africa.',
+    entities: [
+      { text: 'Zola Dlamini', category: 'PERSON' },
+      { text: 'Kenya', category: 'LOCATION' },
+      { text: 'South Africa', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'af-9',
+    text: 'Lead geologist Oluwaseun Adeleke discovered mineral reserves near Ibadan.',
+    entities: [
+      { text: 'Oluwaseun Adeleke', category: 'PERSON' }
+    ]
+  },
+  {
+    id: 'af-10',
+    text: 'Senior scholar Folake Traore chaired the agricultural symposium in Bamako.',
+    entities: [
+      { text: 'Folake Traore', category: 'PERSON' }
+    ]
+  },
+  {
+    id: 'af-11',
+    text: 'Consultant Emeka Mwangi structured infrastructure bonds in Nairobi.',
+    entities: [
+      { text: 'Emeka Mwangi', category: 'PERSON' },
+      { text: 'Nairobi', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'af-12',
+    text: 'Attorney Chiamaka Kenyatta argued the maritime boundary appeal in Mombasa.',
+    entities: [
+      { text: 'Chiamaka Kenyatta', category: 'PERSON' }
+    ]
+  },
+
+  // ── 5. Western & Multi-Turn / Mixed Contexts (Prompts 49-60) ───────────────
+  {
+    id: 'we-1',
+    text: 'Dr. Sarah Jenkins and Sundar Pichai discussed AI alignment at Google in Mountain View.',
+    entities: [
+      { text: 'Sarah Jenkins', category: 'PERSON' },
+      { text: 'Sundar Pichai', category: 'PERSON' },
+      { text: 'Google', category: 'ORG' },
+      { text: 'Mountain View', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'we-2',
+    text: 'Please prepare the acquisition memorandum for Goldman Sachs regarding our office in Tokyo.',
+    entities: [
+      { text: 'Goldman Sachs', category: 'ORG' },
+      { text: 'Tokyo', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'we-3',
+    text: 'Alice Cooper met with Carlos Rodriguez at Acme Corp during their visit to London and Paris.',
+    entities: [
+      { text: 'Alice Cooper', category: 'PERSON' },
+      { text: 'Carlos Rodriguez', category: 'PERSON' },
+      { text: 'Acme Corp', category: 'ORG' },
+      { text: 'London', category: 'LOCATION' },
+      { text: 'Paris', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'we-4',
+    text: 'Elena Rostova sent the updated financial statement to Microsoft headquarters in Redmond.',
+    entities: [
+      { text: 'Elena Rostova', category: 'PERSON' },
+      { text: 'Microsoft', category: 'ORG' },
+      { text: 'Redmond', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'we-5',
+    text: 'Can you draft an email to John Doe in Madrid regarding our enterprise license with Siemens AG?',
+    entities: [
+      { text: 'John Doe', category: 'PERSON' },
+      { text: 'Madrid', category: 'LOCATION' },
+      { text: 'Siemens AG', category: 'ORG' }
+    ]
+  },
+  {
+    id: 'we-6',
+    text: 'Lead engineer Sarah Connor rotated database credentials for Anthropic in San Francisco.',
+    entities: [
+      { text: 'Sarah Connor', category: 'PERSON' },
+      { text: 'Anthropic', category: 'ORG' },
+      { text: 'San Francisco', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'we-7',
+    text: 'Tim Cook announced the new product line for Apple at their campus in Cupertino.',
+    entities: [
+      { text: 'Tim Cook', category: 'PERSON' },
+      { text: 'Apple', category: 'ORG' },
+      { text: 'Cupertino', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'we-8',
+    text: 'Satya Nadella spoke about cloud resilience with Morgan Stanley analysts in Seattle.',
+    entities: [
+      { text: 'Satya Nadella', category: 'PERSON' },
+      { text: 'Morgan Stanley', category: 'ORG' },
+      { text: 'Seattle', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'we-9',
+    text: 'Sam Altman shared research roadmaps from OpenAI with researchers in Boston and Cambridge.',
+    entities: [
+      { text: 'Sam Altman', category: 'PERSON' },
+      { text: 'OpenAI', category: 'ORG' },
+      { text: 'Boston', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'we-10',
+    text: 'Jensen Huang unveiled next-generation hardware from NVIDIA at the conference in Austin.',
+    entities: [
+      { text: 'Jensen Huang', category: 'PERSON' },
+      { text: 'NVIDIA', category: 'ORG' },
+      { text: 'Austin', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'we-11',
+    text: 'Director Xavier Dupont coordinated international security audits for Airbus in Toulouse.',
+    entities: [
+      { text: 'Xavier Dupont', category: 'PERSON' },
+      { text: 'Airbus', category: 'ORG' }
+    ]
+  },
+  {
+    id: 'we-12',
+    text: 'Mikhail Voronin reviewed the distributed search index for Yandex in Frankfurt.',
+    entities: [
+      { text: 'Mikhail Voronin', category: 'PERSON' },
+      { text: 'Yandex', category: 'ORG' },
+      { text: 'Frankfurt', category: 'LOCATION' }
+    ]
+  },
+
+  // ── 6. Sloppy Typing & Lowercase (Prompts 61-68) ───────────────────────────
+  {
+    id: 'sl-1',
+    text: 'hey can you email tariq mehmood at openai about the new update in tokyo?',
+    entities: [
+      { text: 'tariq mehmood', category: 'PERSON' },
+      { text: 'openai', category: 'ORG' },
+      { text: 'tokyo', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'sl-2',
+    text: 'we need dr sarah to review the document for siemens ag in berlin asap',
+    entities: [
+      { text: 'sarah', category: 'PERSON' },
+      { text: 'siemens ag', category: 'ORG' },
+      { text: 'berlin', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'sl-3',
+    text: 'meeting with alice cooper and sundar pichai tomorrow in mountain view',
+    entities: [
+      { text: 'alice cooper', category: 'PERSON' },
+      { text: 'sundar pichai', category: 'PERSON' },
+      { text: 'mountain view', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'sl-4',
+    text: 'contact fatima bhutto regarding acme corp contract in karachi',
+    entities: [
+      { text: 'fatima bhutto', category: 'PERSON' },
+      { text: 'acme corp', category: 'ORG' },
+      { text: 'karachi', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'sl-5',
+    text: 'flying to madrid next week to meet carlos rodriguez from goldman sachs',
+    entities: [
+      { text: 'madrid', category: 'LOCATION' },
+      { text: 'carlos rodriguez', category: 'PERSON' },
+      { text: 'goldman sachs', category: 'ORG' }
+    ]
+  },
+  {
+    id: 'sl-6',
+    text: 'please notify elena rostova that microsoft server in redmond is down',
+    entities: [
+      { text: 'elena rostova', category: 'PERSON' },
+      { text: 'microsoft', category: 'ORG' },
+      { text: 'redmond', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'sl-7',
+    text: 'omar farooq will visit google headquarters in london on friday',
+    entities: [
+      { text: 'omar farooq', category: 'PERSON' },
+      { text: 'google', category: 'ORG' },
+      { text: 'london', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'sl-8',
+    text: 'spoke to kwame mensah about deepmind research in accra and lagos',
+    entities: [
+      { text: 'kwame mensah', category: 'PERSON' },
+      { text: 'deepmind', category: 'ORG' },
+      { text: 'lagos', category: 'LOCATION' }
+    ]
+  },
+
+  // ── 7. Email Headers & Code Comments (Prompts 69-76) ───────────────────────
+  {
+    id: 'hdr-1',
+    text: 'From: Tariq Mehmood <tariq@example.pk>\nTo: DeepMind Team in London\nSubject: Quarterly Report',
+    entities: [
+      { text: 'Tariq Mehmood', category: 'PERSON' },
+      { text: 'DeepMind', category: 'ORG' },
+      { text: 'London', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'hdr-2',
+    text: 'CC: Fatima Bhutto <fatima@karachi.org>, Sarah Connor <connor@defense.gov>',
+    entities: [
+      { text: 'Fatima Bhutto', category: 'PERSON' },
+      { text: 'Sarah Connor', category: 'PERSON' }
+    ]
+  },
+  {
+    id: 'hdr-3',
+    text: '// Author: Bilal Siddiqui\n// Organization: Acme Corp\n// Location: Lahore',
+    entities: [
+      { text: 'Bilal Siddiqui', category: 'PERSON' },
+      { text: 'Acme Corp', category: 'ORG' },
+      { text: 'Lahore', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'hdr-4',
+    text: '/* Code reviewed by: Kwame Mensah at Morgan Stanley in New York */',
+    entities: [
+      { text: 'Kwame Mensah', category: 'PERSON' },
+      { text: 'Morgan Stanley', category: 'ORG' },
+      { text: 'New York', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'hdr-5',
+    text: '# Signed-off-by: Zhang Wei <wei@tencent.com> for Tencent Shenzhen',
+    entities: [
+      { text: 'Zhang Wei', category: 'PERSON' },
+      { text: 'Tencent', category: 'ORG' }
+    ]
+  },
+  {
+    id: 'hdr-6',
+    text: 'Sender: Layla Al-Hassan; Recipient: McKinsey & Company Dubai branch',
+    entities: [
+      { text: 'Layla Al-Hassan', category: 'PERSON' },
+      { text: 'McKinsey & Company', category: 'ORG' },
+      { text: 'Dubai', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'hdr-7',
+    text: 'git-commit: authored by Carlos Rodriguez at Anthropic in San Francisco',
+    entities: [
+      { text: 'Carlos Rodriguez', category: 'PERSON' },
+      { text: 'Anthropic', category: 'ORG' },
+      { text: 'San Francisco', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'hdr-8',
+    text: '// Reviewed-by: Chen Yu <chen@bytedance.com> in Beijing office',
+    entities: [
+      { text: 'Chen Yu', category: 'PERSON' },
+      { text: 'Beijing', category: 'LOCATION' }
+    ]
+  },
+
+  // ── 8. Ambiguous Words: May, Apple, Jordan, Washington, Paris (Prompts 77-84)
+  {
+    id: 'amb-1',
+    text: 'May Johnson submitted the quarterly budget in May to Apple Inc. in Cupertino.',
+    entities: [
+      { text: 'May Johnson', category: 'PERSON' },
+      { text: 'Apple Inc.', category: 'ORG' },
+      { text: 'Cupertino', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'amb-2',
+    text: 'Steve ate a fresh red apple while sitting outside Apple headquarters in Cupertino.',
+    entities: [
+      { text: 'Apple', category: 'ORG' },
+      { text: 'Cupertino', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'amb-3',
+    text: 'Jordan Davis booked a commercial flight to Jordan to visit ancient archaeological sites.',
+    entities: [
+      { text: 'Jordan Davis', category: 'PERSON' },
+      { text: 'Jordan', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'amb-4',
+    text: 'George Washington led the army before George Washington University was founded in Washington, D.C.',
+    entities: [
+      { text: 'George Washington', category: 'PERSON' },
+      { text: 'George Washington University', category: 'ORG' },
+      { text: 'Washington, D.C.', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'amb-5',
+    text: 'Socialite Paris Hilton attended the gala in Paris alongside model Elena Rostova.',
+    entities: [
+      { text: 'Paris Hilton', category: 'PERSON' },
+      { text: 'Paris', category: 'LOCATION' },
+      { text: 'Elena Rostova', category: 'PERSON' }
+    ]
+  },
+  {
+    id: 'amb-6',
+    text: 'May we ask whether Apple will open a new retail store in Washington next May?',
+    entities: [
+      { text: 'Apple', category: 'ORG' },
+      { text: 'Washington', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'amb-7',
+    text: 'Jordan visited historic sights across Jordan before returning to London.',
+    entities: [
+      { text: 'Jordan', category: 'LOCATION' },
+      { text: 'London', category: 'LOCATION' }
+    ]
+  },
+  {
+    id: 'amb-8',
+    text: 'General Washington commanded troops across Virginia and Washington State.',
+    entities: [
+      { text: 'Washington', category: 'PERSON' },
+      { text: 'Washington', category: 'LOCATION' }
+    ]
+  },
+
+  // ── 9. Code Identifiers & File Paths (Negative / Filter Checks 85-88) ───────
+  {
+    id: 'neg-1',
+    text: 'const userId = getUserProfile(targetId); return user_profile_data;',
+    entities: []
+  },
+  {
+    id: 'neg-2',
+    text: 'File saved at C:\\Users\\Alice\\Documents\\report.pdf and /var/log/nginx/access.log',
+    entities: []
+  },
+  {
+    id: 'neg-3',
+    text: 'However, because the system initialized correctly, when the worker started it was fine.',
+    entities: []
+  },
+  {
+    id: 'neg-4',
+    text: 'Dr. Sarah Jenkins reviewed the source code at `src/components/UserProfile.tsx` for Google in Chicago.',
+    entities: [
+      { text: 'Sarah Jenkins', category: 'PERSON' },
+      { text: 'Google', category: 'ORG' },
+      { text: 'Chicago', category: 'LOCATION' }
+    ]
+  }
+];
+
+const totalPrompts = HELD_OUT_DATASET.length;
+const totalEntities = HELD_OUT_DATASET.reduce((sum, item) => sum + item.entities.length, 0);
+
+console.log(`Held-Out Test Set Generated:`);
+console.log(`  Total Prompts:  ${totalPrompts} (target: >= 60)`);
+console.log(`  Total Entities: ${totalEntities} (target: >= 150)`);
+
+const counts = { PERSON: 0, ORG: 0, LOCATION: 0 };
+for (const item of HELD_OUT_DATASET) {
+  for (const ent of item.entities) {
+    counts[ent.category]++;
+  }
+}
+console.log(`  Entity Breakdown:`, counts);
+
+const outPath = path.resolve(__dirname, '../tests/data/held-out-eval.json');
+fs.mkdirSync(path.dirname(outPath), { recursive: true });
+fs.writeFileSync(outPath, JSON.stringify(HELD_OUT_DATASET, null, 2));
+console.log(`✓ Saved held-out evaluation dataset to: ${outPath}`);

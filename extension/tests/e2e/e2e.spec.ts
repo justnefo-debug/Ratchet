@@ -568,6 +568,55 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
 
     expect(expiredCheck).toBe(0);
   });
+
+  // ─── Test 11: Stage 5 NER Round-Trip Interception & Restoration ───────────
+  test('11: Stage 5 NER round-trip: name, org, and location are redacted on the wire and restored in the display', async () => {
+    const convId = 'conv-ner-roundtrip';
+    await page.goto(`http://127.0.0.1:${PORT}/?c=${convId}`);
+    await page.waitForLoadState('networkidle');
+    server.clearLoggedRequests();
+
+    const nerPrompt = 'Dr. Tariq Mehmood met with OpenAI representatives in Tokyo.';
+    await page.locator('#prompt-textarea').fill(nerPrompt);
+    await page.locator('#send-textarea-btn').click();
+    await expect(page.locator('#status')).toHaveText('Completed', { timeout: 15000 });
+
+    // 1. Assert redacted on the wire
+    expect(server.loggedRequests.length).toBe(1);
+    const wireBody = server.loggedRequests[0].body;
+    expect(wireBody).toContain('«PERSON_1»');
+    expect(wireBody).toContain('«ORG_1»');
+    expect(wireBody).toContain('«LOCATION_1»');
+    expect(wireBody).not.toContain('Tariq Mehmood');
+    expect(wireBody).not.toContain('OpenAI');
+    expect(wireBody).not.toContain('Tokyo');
+
+    // 2. Assert restored in page display (assistant echoes and restorer restores)
+    const assistantMsg = page.locator('.assistant-message').last();
+    await expect(assistantMsg).toBeVisible();
+    await expect(assistantMsg).toContainText('Tariq Mehmood');
+    await expect(assistantMsg).toContainText('OpenAI');
+    await expect(assistantMsg).toContainText('Tokyo');
+    await expect(assistantMsg).not.toContainText('«PERSON_1»');
+    await expect(assistantMsg).not.toContainText('«ORG_1»');
+    await expect(assistantMsg).not.toContainText('«LOCATION_1»');
+
+    // 4. Measure memory via CDP Performance.getMetrics
+    const client = await page.context().newCDPSession(page);
+    await client.send('Performance.enable');
+    const perfMetrics = await client.send('Performance.getMetrics');
+    const jsHeapUsed = perfMetrics.metrics.find((m) => m.name === 'JSHeapUsedSize')?.value || 0;
+    const jsHeapTotal = perfMetrics.metrics.find((m) => m.name === 'JSHeapTotalSize')?.value || 0;
+
+    console.log(`\n========================================`);
+    console.log(`🧠 CDP Performance.getMetrics After NER Load:`);
+    console.log(`   JSHeapUsedSize:  ${(jsHeapUsed / (1024 * 1024)).toFixed(2)} MB`);
+    console.log(`   JSHeapTotalSize: ${(jsHeapTotal / (1024 * 1024)).toFixed(2)} MB`);
+    console.log(`========================================\n`);
+
+    // Strict memory constraint check: must be under 50 MB
+    expect(jsHeapUsed / (1024 * 1024)).toBeLessThan(50);
+  });
 });
 
 

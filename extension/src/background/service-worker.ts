@@ -135,7 +135,14 @@ export async function handleRedact(request: {
   const regexEntities = detectWithRegex(text);
   const customResult = detectWithCustomRules(text, settings.customRules || []);
   const customEntities = customResult.entities;
-  const nerEntities = await detectWithNer(text);
+  const nerEntities = await detectWithNer(text, {
+    sensitivity: settings.sensitivity,
+    enabledTypes: {
+      person: settings.entityToggles?.PERSON !== false,
+      org: settings.entityToggles?.ORG !== false,
+      location: settings.entityToggles?.LOCATION !== false,
+    },
+  });
 
   const allEntities: DetectedEntity[] = [
     ...regexEntities,

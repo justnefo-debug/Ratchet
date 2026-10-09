@@ -195,6 +195,9 @@ const Popup = () => {
         >
           Options & Custom Rules
         </button>
+        <div style={{ marginTop: '8px', fontSize: '10px', color: '#64748b', textAlign: 'center', fontStyle: 'italic' }}>
+          * Name, organization, and location detection is best-effort.
+        </div>
       </div>
     </div>
   );

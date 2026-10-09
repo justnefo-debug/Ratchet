@@ -1,0 +1,30 @@
+# NOTICE - Third-Party Data & Lexicon Attributions
+
+Ratchet bundles pre-compiled name, organization, and location lexicons for offline, zero-network privacy detection. The underlying source data is derived from openly licensed and public domain datasets described below.
+
+---
+
+### 1. United States Census Bureau Surnames & Given Names
+- **Source**: U.S. Census Bureau, Population Division (https://www.census.gov/topics/population/genealogy/data.html)
+- **License**: U.S. Government Work / Public Domain (17 U.S.C. § 105)
+- **Attribution**: U.S. Census Bureau Demographic Surveys and Decennial Census data (Public Domain, free for redistribution and commercial use).
+
+### 2. GeoNames Geographical Database
+- **Source**: GeoNames (https://www.geonames.org/)
+- **License**: Creative Commons Attribution 4.0 International (CC BY 4.0)
+- **Attribution**: "This product includes data from GeoNames (https://www.geonames.org/), made available under the Creative Commons Attribution 4.0 License."
+
+### 3. Natural Earth Vector Data
+- **Source**: Natural Earth (https://www.naturalearthdata.com/)
+- **License**: Public Domain
+- **Attribution**: Data created by Nathaniel Vaughn Kelso, Tom Patterson, and Natural Earth contributors (Public Domain).
+
+### 4. SEC EDGAR Company Database
+- **Source**: U.S. Securities and Exchange Commission EDGAR Database (https://www.sec.gov/edgar)
+- **License**: U.S. Government Work / Public Domain
+- **Attribution**: SEC Company Filings and Public Corporate Registries (Public Domain).
+
+### 5. Wikidata & Open Lexical Gazetteers
+- **Source**: Wikidata Query Service / Wikimedia Foundation (https://www.wikidata.org/)
+- **License**: Creative Commons CC0 1.0 Universal Public Domain Dedication (CC0 1.0)
+- **Attribution**: Global given names, surnames, and institutions structured data released under CC0 1.0 Universal Public Domain Dedication.
