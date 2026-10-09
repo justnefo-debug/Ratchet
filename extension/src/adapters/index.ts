@@ -4,14 +4,17 @@
 
 import type { SiteAdapter } from './types';
 import { ChatGPTAdapter } from './chatgpt';
+import { ClaudeAdapter } from './claude';
 import { MockSiteAdapter } from './mock';
 
 export * from './types';
 export * from './chatgpt';
+export * from './claude';
 export * from './mock';
 
 const ADAPTERS: SiteAdapter[] = [
   new ChatGPTAdapter(),
+  new ClaudeAdapter(),
   new MockSiteAdapter(),
 ];
 
