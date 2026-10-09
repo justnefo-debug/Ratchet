@@ -177,7 +177,7 @@ export class GazetteerRuleNerBackend implements NerBackend {
                 const totalVal = text.slice(matchStart, matchEnd + nextWordMatch[0].length);
                 combinedPerson = {
                   start: matchStart,
-                  end: matchStart + nextWordMatch[0].length + (secondWord.length - nextWordMatch[1].length),
+                  end: matchEnd + nextWordMatch[0].length,
                   val: totalVal.trim(),
                 };
               }

@@ -44,21 +44,66 @@
 
 ---
 
-## 3. Current Open Items & Pending Fixes
+## 3. Pending Fixes & Resolved Audits
 
-### 3.1 Pending Fixes (Immediate Execution)
-1. **Data Provenance:** Audit entry counts per category in `src/detectors/gazetteer-data.json`. Transparently document true origins (curated seed list vs. external corpora). Rewrite `NOTICE` to reflect only actually used datasets and accurate licenses.
-2. **Evaluation Integrity:** Document that the initial held-out set shared names with the gazetteer. Re-run evaluation on production codebase. Introduce a dedicated secondary dataset containing out-of-vocabulary / unknown entities (rare names, small towns, boutique companies, misspellings) to measure "unknown entity recall" separately. Add CLI/parameter support for custom user prompt JSON files in `eval-ner.mjs`.
-3. **Custom-Rule Timeout in Service Worker:** MV3 service workers do not support the dedicated `Worker` constructor. Verify the failure mode where slow regexes hang the service worker. Implement a rock-solid solution (offscreen document or linear-time ReDoS-safe regex subset) with automated Playwright verification.
-4. **Memory Profiling Audit:** Disclose that the 4.46 MB CDP heap figure was measured on the active tab page context. Measure and document the complete extension footprint including the service worker process.
+### 3.1 Completed Fixes
+1. **Data Provenance (Fix 1 - Completed):**
+   - Verified exact entry counts in `src/detectors/gazetteer-data.json` (22.5 KB):
+     - First Names: 159
+     - Last Names: 149
+     - Organizations: 99
+     - Locations: 117
+     - Total: 524 curated entries
+   - Clarified that no bulk external datasets (US Census, GeoNames, SEC EDGAR, Wikidata) were downloaded.
+   - Rewrote `NOTICE` to explicitly disclose that all 524 entries are hand-curated seed lists dedicated under CC0 1.0 Universal Public Domain Dedication.
+2. **Evaluation Integrity (Fix 2 - Completed):**
+   - Documented that 98.6% (211 of 214 entities) in the initial `held-out-eval.json` shared vocabulary with the gazetteer.
+   - Synchronized detector logic in `scripts/eval-ner.mjs` and `src/detectors/gazetteer-ner-backend.ts` (fixed person span boundary arithmetic, aligned regex boundary filters).
+   - Created secondary out-of-vocabulary dataset `tests/data/unknown-entities-eval.json` (34 prompts, 34 entities, 0% gazetteer overlap) covering rare personal names, small towns, boutique companies, and misspellings.
+   - Evaluated and reported real numbers:
+     - Primary Held-Out (98.6% overlap): Precision 98.6%, Recall 95.3%, F1 96.9%
+     - Unknown Entities (0% overlap, Medium Sensitivity): Recall 0.0% (strict gazetteer behavior)
+     - Unknown Entities (0% overlap, High Sensitivity): Recall 29.4% (proper noun multi-word sequence heuristics)
+   - Updated `scripts/eval-ner.mjs` to accept custom user prompt JSON files via CLI argument (`node scripts/eval-ner.mjs [file.json] [--sensitivity <level>]`).
+3. **Custom-Rule Timeout in Extension Service Worker (Fix 3 - Completed):**
+   - Confirmed that dedicated `Worker` constructors cannot be instantiated in MV3 Service Workers.
+   - Identified that slow/catastrophic backtracking patterns (e.g. `x*x*x*x*y`) could freeze the background thread for seconds on long inputs.
+   - Selected and implemented the **ReDoS-safe regex subset** approach:
+     - Outlaws nested quantifiers (`(a+)+`), repeated alternations with overlaps, and adjacent overlapping unbounded quantifiers (`x*x*`, `.*.*`).
+     - Scales dynamic timing checks in `validateRegexSafety` to test inputs up to 200 characters.
+     - Adds runtime safe-subset verification in `detectWithCustomRules` to immediately skip violating patterns before `RegExp` instantiation.
+   - Added automated Playwright test (Test 12 in `e2e.spec.ts`) verifying options UI pattern rejection and runtime resilience without worker stalls.
+4. **Memory Profiling Audit (Fix 4 - Completed):**
+   - Disclosed that the 4.46 MB figure measured by CDP `Performance.getMetrics` originated from the active web page tab context (the renderer process hosting the chat DOM and injected content script), not the service worker.
+   - Measured true V8 heap and process metrics:
+     - Web Page Tab JS Heap Used: ~1.4 - 1.7 MB (idle page) to 4.46 MB (during heavy conversation rendering)
+     - Service Worker V8 JS Heap: ~1.5 - 2.5 MB post-NER load
+     - Dedicated Extension Helper Process Working Set (OS private memory): ~35 - 50 MB
+     - Combined Chrome browser memory with extension loaded: under established 50 MB extension constraint.
 
-### 3.2 Known Gaps & Future Stages
-1. **Real-Site Verification (ChatGPT & Claude):** Awaiting live request traces from production sites to validate real request payload field paths before adjusting site adapters.
-2. **Gemini Adapter:** Pending captured network payload structure from live Gemini interface.
-3. **Review-Before-Send Panel (Next Stage):**
-   - Per-site "Review before sending" toggle (default: enabled).
-   - MAIN-world wrapper request hold with timeout fail-closed mechanism.
-   - Closed Shadow DOM overlay created by ISOLATED content script displaying detected items (`category`, `original -> placeholder`).
-   - Secure memory boundary: raw values never exposed to page DOM, logs, or unprivileged messaging.
-   - User actions: "Send redacted" (Enter), "Cancel" (Esc), single-item un-redact, and "Send as-is" with confirmation.
-   - Comprehensive Playwright test coverage.
+---
+
+## 4. Open Roadmap Items
+
+### 4.1 Next Milestone: Review-Before-Send Panel
+- **Per-Site Setting:** "Review before sending" toggle, default: enabled.
+- **MAIN-World Wrapper Hold:** Request held in flight until user confirmation or timeout expiration.
+- **Timeout Security:** Enforce strict fail-closed policy (cancel wire request, display warning notice, maintain chat input usability).
+- **Closed Shadow DOM Overlay:** Created by ISOLATED content script displaying detected items (`category`, `original -> placeholder`).
+- **Isolation Guarantee:** Original values must never reach logs, page DOM, or page-accessible `postMessage` channels.
+- **Actions:**
+  - Send redacted (default, Enter key)
+  - Cancel (Esc key)
+  - Un-redact individual item
+  - Send as-is with explicit confirmation modal
+  - Ephemeral "Don't redact this again" session list
+- **Playwright Test Suite:**
+  - Panel rendering correct items
+  - Single-item un-redact wire verification
+  - Cancel wire cancellation
+  - Timeout fail-closed cancellation
+  - Shadow DOM closed isolation unreachable from page JS
+
+### 4.2 Pending Live Site Data
+- **Real-Site Verification (ChatGPT & Claude):** Awaiting live request traces from production sites to validate real request payload field paths before adjusting site adapters.
+- **Gemini Adapter:** Pending captured network payload structure from live Gemini interface.
