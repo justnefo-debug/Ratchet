@@ -12,6 +12,9 @@ extension/dist/
 test-profile/
 *-profile/
 *.tmp
+test-results/
+extension/test-results/
+playwright-report/
 
 # Logs
 *.log

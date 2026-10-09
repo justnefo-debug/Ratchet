@@ -13,6 +13,7 @@ import { restore } from '../core/restorer';
 import {
   getConversationMapping,
   saveConversationMapping,
+  migrateConversationMapping,
   getSettings,
   updateStats,
 } from './storage';
@@ -41,6 +42,13 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === 'getMapping') {
     handleGetMapping(request)
       .then((data) => sendResponse({ success: true, data }))
+      .catch((err) => sendResponse({ success: false, error: err.toString() }));
+    return true;
+  }
+
+  if (request.action === 'migrateMapping') {
+    migrateConversationMapping(request.fromId, request.toId)
+      .then(() => sendResponse({ success: true }))
       .catch((err) => sendResponse({ success: false, error: err.toString() }));
     return true;
   }
@@ -174,7 +182,6 @@ async function handleRestore(request: {
 
   const restoredText = restore(text, mappings);
 
-  // Count how many placeholders were replaced
   let restoredCount = 0;
   for (const entry of mappings) {
     if (text.includes(entry.placeholder) || text.includes(entry.placeholder.slice(1, -1))) {

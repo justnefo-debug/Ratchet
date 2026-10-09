@@ -4,15 +4,19 @@
   "description": "Ratchet Privacy Shield Chrome Extension",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build:vite": "tsc && vite build",
+    "build:content": "esbuild src/content/interceptor-main.ts --bundle --format=iife --outfile=dist/assets/interceptor-main.js && esbuild src/content/index.ts --bundle --format=iife --outfile=dist/assets/content.js",
+    "build": "npm run build:vite && npm run build:content",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@types/chrome": "^0.0.254",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",

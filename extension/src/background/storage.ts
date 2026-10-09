@@ -48,6 +48,50 @@ export async function saveConversationMapping(
 }
 
 /**
+ * Migrate mapping from a temporary ID to a real conversation ID when URL updates.
+ */
+export async function migrateConversationMapping(
+  fromId: string,
+  toId: string,
+): Promise<void> {
+  if (!chrome?.storage?.session || fromId === toId) return;
+
+  const fromKey = `${STORAGE_KEY_CONV_PREFIX}${fromId}`;
+  const toKey = `${STORAGE_KEY_CONV_PREFIX}${toId}`;
+
+  return new Promise((resolve) => {
+    chrome.storage.session.get([fromKey, toKey], (res) => {
+      const fromMapping = res[fromKey] as ConversationMapping | undefined;
+      const toMapping = res[toKey] as ConversationMapping | undefined;
+
+      if (!fromMapping) {
+        resolve();
+        return;
+      }
+
+      const mergedEntries = [...(toMapping?.entries || [])];
+      for (const entry of fromMapping.entries) {
+        if (!mergedEntries.some((e) => e.placeholder === entry.placeholder)) {
+          mergedEntries.push(entry);
+        }
+      }
+
+      const updatedTo: ConversationMapping = {
+        conversationId: toId,
+        siteOrigin: toMapping?.siteOrigin || fromMapping.siteOrigin,
+        entries: mergedEntries,
+        createdAt: toMapping?.createdAt || fromMapping.createdAt,
+        lastUsedAt: Date.now(),
+      };
+
+      chrome.storage.session.set({ [toKey]: updatedTo }, () => {
+        chrome.storage.session.remove([fromKey], () => resolve());
+      });
+    });
+  });
+}
+
+/**
  * Get current extension settings from chrome.storage.local.
  */
 export async function getSettings(): Promise<RatchetSettings> {
