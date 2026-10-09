@@ -62,6 +62,35 @@ const CODE_PUNCTUATION = /[{}();<>=[\]$]/;
 // Sentence boundary check: preceded by start of string, newline, or punctuation + space
 const SENTENCE_START_PRE = /(?:^|[\r\n]+|[.!?]\s+)$/;
 
+// Ambiguous common English words that must NOT match as standalone entities without strong context cues
+export const AMBIGUOUS_NAMES = new Set([
+  'will', 'bill', 'sue', 'mark', 'grace', 'young', 'bell', 'reading', 'orange', 'olive',
+  'chase', 'ford', 'cook', 'page', 'brown', 'white', 'rose', 'stone', 'wood', 'hope',
+  'best', 'price', 'cross', 'short', 'long', 'early', 'grant', 'general', 'rob', 'bob',
+  'art', 'joy', 'faith', 'dawn', 'penny', 'crystal', 'amber', 'ruby', 'robin', 'glen',
+  'cliff', 'dale', 'holly', 'heather', 'ivy', 'daisy', 'iris', 'lily', 'violet', 'jasmine',
+  'hazel', 'cherry', 'sage', 'guy', 'may', 'june', 'march', 'april', 'summer', 'fall',
+  'winter', 'spring', 'meta', 'apple', 'target', 'visa', 'major', 'minor', 'dean', 'king',
+  'prince', 'frank', 'gene', 'miles', 'ray', 'reed', 'lane', 'wade', 'glenn', 'clay',
+  'perry', 'barry', 'carroll', 'gale', 'kent', 'clark', 'neal', 'forest', 'hunter',
+  'mason', 'baker', 'butler', 'carpenter', 'farmer', 'fisher', 'gardner', 'miller',
+  'porter', 'potter', 'shepherd', 'smith', 'taylor', 'turner', 'weaver', 'wright'
+]);
+
+export const AMBIGUOUS_LOCATIONS = new Set([
+  'reading', 'orange', 'nice', 'split', 'bath', 'deal', 'mobile', 'florence', 'victoria',
+  'darwin', 'concord', 'corona', 'independence', 'surprise', 'normal', 'lima', 'turin',
+  'aurora', 'eureka', 'phoenix', 'rapid', 'billings', 'bowling', 'hazard', 'clay',
+  'hope', 'baker', 'butler', 'warren', 'marion', 'washington', 'lincoln', 'jackson'
+]);
+
+export const AMBIGUOUS_ORGS = new Set([
+  'target', 'visa', 'apple', 'meta', 'chase', 'block', 'square', 'box', 'caterpillar',
+  'staples', 'gap', 'coach', 'shell', 'subway', 'next', 'match', 'slack', 'base', 'stripe',
+  'ford', 'bell', 'best', 'page', 'price', 'general', 'standard', 'alliance', 'progress',
+  'advance', 'travelers', 'key', 'spectrum', 'anthem', 'humana', 'cigna', 'centene'
+]);
+
 // ─── Gazetteer NER Backend ──────────────────────────────────────────────────
 
 export class GazetteerRuleNerBackend implements NerBackend {
@@ -211,17 +240,20 @@ export class GazetteerRuleNerBackend implements NerBackend {
                 i = matchEnd;
                 continue;
               } else if (sensitivity !== 'low' && !isSentenceInitial) {
-                // If not sentence initial and medium/high
-                entities.push({
-                  type: 'PERSON',
-                  value: matchVal,
-                  start: matchStart,
-                  end: matchEnd,
-                  confidence: 0.75,
-                  source: 'ner',
-                });
-                i = matchEnd;
-                continue;
+                // If not sentence initial and medium/high, only accept if NOT an ambiguous dictionary word
+                const isAmbiguous = AMBIGUOUS_NAMES.has(matchVal.toLowerCase());
+                if (!isAmbiguous) {
+                  entities.push({
+                    type: 'PERSON',
+                    value: matchVal,
+                    start: matchStart,
+                    end: matchEnd,
+                    confidence: 0.75,
+                    source: 'ner',
+                  });
+                  i = matchEnd;
+                  continue;
+                }
               }
             }
           }
@@ -258,21 +290,20 @@ export class GazetteerRuleNerBackend implements NerBackend {
             }
 
             const hasOrgCue = ORG_PREPOSITIONS.test(prefix) || ORG_SUFFIX.test(orgVal);
-            const isAmbiguousFruit = matchVal.toLowerCase() === 'apple' && !hasOrgCue && /\b(?:ate|eat|fruit|red|green|fresh)\b/i.test(prefix);
+            const isAmbiguousOrg = AMBIGUOUS_ORGS.has(matchVal.toLowerCase());
+            const passesOrgFilter = isAmbiguousOrg ? hasOrgCue : (sensitivity === 'low' ? hasOrgCue : true);
 
-            if (!isAmbiguousFruit) {
-              if (sensitivity === 'low' ? hasOrgCue : true) {
-                entities.push({
-                  type: 'ORG',
-                  value: orgVal,
-                  start: matchStart,
-                  end: orgEnd,
-                  confidence: 0.95,
-                  source: 'ner',
-                });
-                i = orgEnd;
-                continue;
-              }
+            if (passesOrgFilter) {
+              entities.push({
+                type: 'ORG',
+                value: orgVal,
+                start: matchStart,
+                end: orgEnd,
+                confidence: 0.95,
+                source: 'ner',
+              });
+              i = orgEnd;
+              continue;
             }
           }
 
@@ -281,20 +312,20 @@ export class GazetteerRuleNerBackend implements NerBackend {
             const hasLocCue = LOCATION_PREPOSITIONS.test(prefix);
             const isAmbiguousPerson = (matchVal.toLowerCase() === 'jordan' || matchVal.toLowerCase() === 'paris') &&
               (TITLE_HONORIFIC_PREFIX.test(prefix) || RELATIONAL_PREFIX.test(prefix) || /^[A-Z][a-z]+$/.test(suffix.trim().split(/\s+/)[0] || ''));
+            const isAmbiguousLoc = AMBIGUOUS_LOCATIONS.has(matchVal.toLowerCase());
+            const passesLocFilter = isAmbiguousLoc ? hasLocCue : (sensitivity === 'low' ? hasLocCue : true);
 
-            if (!isAmbiguousPerson) {
-              if (sensitivity === 'low' ? hasLocCue : true) {
-                entities.push({
-                  type: 'LOCATION',
-                  value: matchVal,
-                  start: matchStart,
-                  end: matchEnd,
-                  confidence: 0.95,
-                  source: 'ner',
-                });
-                i = matchEnd;
-                continue;
-              }
+            if (!isAmbiguousPerson && passesLocFilter) {
+              entities.push({
+                type: 'LOCATION',
+                value: matchVal,
+                start: matchStart,
+                end: matchEnd,
+                confidence: 0.95,
+                source: 'ner',
+              });
+              i = matchEnd;
+              continue;
             }
           }
         }
