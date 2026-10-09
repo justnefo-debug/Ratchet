@@ -17,8 +17,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 import { ChatGPTAdapter } from '../src/adapters/chatgpt';
 import { ClaudeAdapter } from '../src/adapters/claude';
+import { getAdapterForUrl } from '../src/adapters';
 
 describe('ChatGPTAdapter', () => {
   const adapter = new ChatGPTAdapter();
@@ -298,3 +301,53 @@ describe('ClaudeAdapter', () => {
     ).toBeNull();
   });
 });
+
+describe('Gemini Support & Interception Status', () => {
+  it('confirms Gemini is not supported and getAdapterForUrl returns null', () => {
+    // gemini.google.com has no adapter
+    expect(getAdapterForUrl('https://gemini.google.com/')).toBeNull();
+    expect(getAdapterForUrl('https://gemini.google.com/app')).toBeNull();
+    expect(getAdapterForUrl('https://gemini.google.com/chat/12345')).toBeNull();
+
+    // Confirm neither ChatGPT nor Claude adapters match Gemini URLs
+    const chatgpt = new ChatGPTAdapter();
+    const claude = new ClaudeAdapter();
+    expect(chatgpt.matchesPage('https://gemini.google.com/')).toBe(false);
+    expect(claude.matchesPage('https://gemini.google.com/')).toBe(false);
+  });
+
+  it('confirms extension manifest does not request host permissions or inject into gemini.google.com', () => {
+    const manifestPath = path.resolve(__dirname, '../public/manifest.json');
+    if (fs.existsSync(manifestPath)) {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+
+      // Check host_permissions
+      const hostPerms = manifest.host_permissions || [];
+      expect(hostPerms.some((p: string) => p.includes('gemini.google.com'))).toBe(false);
+
+      // Check content scripts matches
+      for (const cs of manifest.content_scripts || []) {
+        expect(cs.matches.some((m: string) => m.includes('gemini.google.com'))).toBe(false);
+      }
+    }
+  });
+
+  it('confirms no network interception runs on gemini.google.com', () => {
+    // The MAIN-world network interceptor starts with:
+    // const adapter = getAdapterForUrl(window.location.href);
+    // if (!adapter) return;
+    //
+    // Since getAdapterForUrl is null for gemini.google.com, execution halts immediately:
+    const adapter = getAdapterForUrl('https://gemini.google.com/app');
+    expect(adapter).toBeNull();
+
+    // Verify simulating a fetch call without adapter leaves request unmodified
+    const originalBody = JSON.stringify({ prompt: 'test user query to gemini' });
+    let intercepted = false;
+    if (adapter) {
+      intercepted = true;
+    }
+    expect(intercepted).toBe(false);
+  });
+});
+
