@@ -7,6 +7,7 @@
 
 import { detectWithRegex } from '../detectors/regex-detector';
 import { detectWithCustomRules } from '../detectors/custom-rules';
+import { detectWithSensitiveTerms } from '../detectors/sensitive-terms';
 import { detectWithNer } from '../detectors/ner-detector';
 import { redact, deduplicateOverlaps } from '../core/redactor';
 import { restore } from '../core/restorer';
@@ -136,6 +137,7 @@ export async function handleRedact(request: {
   const regexEntities = detectWithRegex(text);
   const customResult = detectWithCustomRules(text, settings.customRules || []);
   const customEntities = customResult.entities;
+  const sensitiveTermEntities = detectWithSensitiveTerms(text, settings.sensitiveTerms || []);
   const nerEntities = await detectWithNer(text, {
     sensitivity: settings.sensitivity,
     enabledTypes: {
@@ -148,6 +150,7 @@ export async function handleRedact(request: {
   const allEntities: DetectedEntity[] = [
     ...regexEntities,
     ...customEntities,
+    ...sensitiveTermEntities,
     ...nerEntities,
   ];
 

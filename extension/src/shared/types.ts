@@ -52,10 +52,20 @@ export interface CustomRule {
 
 export type Sensitivity = 'low' | 'medium' | 'high';
 
+export type SensitiveTermCategory = 'PERSON' | 'ORG' | 'PROJECT' | 'LOCATION';
+
+export interface SensitiveTerm {
+  id: string;
+  term: string;
+  category: SensitiveTermCategory;
+  enabled: boolean;
+}
+
 export interface RatchetSettings {
   enabled: boolean;
   sensitivity: Sensitivity;
   customRules: CustomRule[];
+  sensitiveTerms?: SensitiveTerm[];
   enabledSites: {
     chatgpt: boolean;
     claude: boolean;

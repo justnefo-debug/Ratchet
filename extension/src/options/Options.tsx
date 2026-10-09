@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './options.css';
 import { DEFAULT_SETTINGS, STORAGE_KEY_SETTINGS } from '../shared/constants';
 import { validateRegexSafetyAsync } from '../detectors/redos-validator';
-import type { RatchetSettings, CustomRule, Sensitivity } from '../shared/types';
+import type { RatchetSettings, CustomRule, Sensitivity, SensitiveTerm, SensitiveTermCategory } from '../shared/types';
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
   EMAIL: 'Email Addresses',
@@ -32,6 +32,48 @@ const Options: React.FC = () => {
   const [newRuleType, setNewRuleType] = useState<'regex' | 'keyword'>('regex');
   const [newRulePattern, setNewRulePattern] = useState('');
   const [ruleValidationError, setRuleValidationError] = useState<string | null>(null);
+
+  // Sensitive terms form state
+  const [newTermText, setNewTermText] = useState('');
+  const [newTermCategory, setNewTermCategory] = useState<SensitiveTermCategory>('PERSON');
+
+  const handleAddSensitiveTerm = () => {
+    const trimmed = newTermText.trim();
+    if (!trimmed) return;
+    const newTerm: SensitiveTerm = {
+      id: `term-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      term: trimmed,
+      category: newTermCategory,
+      enabled: true,
+    };
+    const updated = [...(settings.sensitiveTerms || []), newTerm];
+    const newSettings = { ...settings, sensitiveTerms: updated };
+    setSettings(newSettings);
+    setNewTermText('');
+    if (chrome?.storage?.local) {
+      chrome.storage.local.set({ [STORAGE_KEY_SETTINGS]: newSettings });
+    }
+  };
+
+  const handleRemoveSensitiveTerm = (id: string) => {
+    const updated = (settings.sensitiveTerms || []).filter((t) => t.id !== id);
+    const newSettings = { ...settings, sensitiveTerms: updated };
+    setSettings(newSettings);
+    if (chrome?.storage?.local) {
+      chrome.storage.local.set({ [STORAGE_KEY_SETTINGS]: newSettings });
+    }
+  };
+
+  const handleToggleSensitiveTerm = (id: string, enabled: boolean) => {
+    const updated = (settings.sensitiveTerms || []).map((t) =>
+      t.id === id ? { ...t, enabled } : t,
+    );
+    const newSettings = { ...settings, sensitiveTerms: updated };
+    setSettings(newSettings);
+    if (chrome?.storage?.local) {
+      chrome.storage.local.set({ [STORAGE_KEY_SETTINGS]: newSettings });
+    }
+  };
 
   useEffect(() => {
     if (chrome?.storage?.local) {
@@ -273,6 +315,155 @@ const Options: React.FC = () => {
                 </div>
               );
             })}
+          </div>
+        </section>
+
+        {/* My Sensitive Terms Section */}
+        <section className="settings-section">
+          <h2>My Sensitive Terms</h2>
+          <p className="help-text">
+            Add your personal sensitive terms (names, employers, projects, places). Terms are matched as whole words (case-insensitive) and automatically include possessive variants (<code>'s</code>) and last names alone if a full name is added.
+          </p>
+
+          {/* Security Disclosure Notice */}
+          <div
+            id="sensitive-terms-storage-notice"
+            style={{
+              background: 'rgba(234, 179, 8, 0.1)',
+              border: '1px solid rgba(234, 179, 8, 0.3)',
+              borderRadius: '6px',
+              padding: '10px 14px',
+              margin: '10px 0 16px',
+              fontSize: '12px',
+              color: '#fef08a',
+              lineHeight: '1.4',
+            }}
+          >
+            🔒 <strong>Security Notice:</strong> This list is stored locally on this machine and is itself sensitive. It never leaves your browser.
+          </div>
+
+          {/* Add New Term Form */}
+          <div className="rule-form">
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#e2e8f0' }}>Add Sensitive Term</h3>
+            <div className="form-row">
+              <div className="form-group" style={{ flex: 2 }}>
+                <label htmlFor="new-term-input">Sensitive Term or Name</label>
+                <input
+                  id="new-term-input"
+                  type="text"
+                  maxLength={100}
+                  placeholder="e.g., Alice Smith, Acme Corp, Project Titan, Zurich"
+                  value={newTermText}
+                  onChange={(e) => setNewTermText(e.target.value)}
+                  className="text-input"
+                />
+              </div>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label htmlFor="new-term-category">Category</label>
+                <select
+                  id="new-term-category"
+                  value={newTermCategory}
+                  onChange={(e) => setNewTermCategory(e.target.value as SensitiveTermCategory)}
+                  className="select-input"
+                >
+                  <option value="PERSON">Name (PERSON)</option>
+                  <option value="ORG">Employer (ORG)</option>
+                  <option value="PROJECT">Project (PROJECT)</option>
+                  <option value="LOCATION">Place (LOCATION)</option>
+                </select>
+              </div>
+              <div className="form-group" style={{ alignSelf: 'flex-end' }}>
+                <button
+                  id="add-term-btn"
+                  type="button"
+                  onClick={handleAddSensitiveTerm}
+                  disabled={!newTermText.trim()}
+                  className="btn btn-primary"
+                  style={{ height: '38px', whiteSpace: 'nowrap' }}
+                >
+                  + Add Term
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Existing Terms List */}
+          <div className="rules-list" style={{ marginTop: '16px' }}>
+            <h3 style={{ fontSize: '14px', color: '#e2e8f0', marginBottom: '8px' }}>
+              Configured Terms ({settings.sensitiveTerms?.length || 0})
+            </h3>
+            {(!settings.sensitiveTerms || settings.sensitiveTerms.length === 0) ? (
+              <p style={{ fontSize: '13px', color: '#64748b', fontStyle: 'italic' }}>
+                No sensitive terms configured yet. Add your name, company, or secret projects above.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {settings.sensitiveTerms.map((term) => (
+                  <div
+                    key={term.id}
+                    className="sensitive-term-card"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 14px',
+                      background: '#1e293b',
+                      border: '1px solid #334155',
+                      borderRadius: '6px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          background:
+                            term.category === 'PERSON' ? '#8b5cf6' :
+                            term.category === 'ORG' ? '#0ea5e9' :
+                            term.category === 'LOCATION' ? '#10b981' : '#f59e0b',
+                          color: '#ffffff',
+                        }}
+                      >
+                        {term.category}
+                      </span>
+                      <strong style={{ fontSize: '13px', color: '#f8fafc' }}>{term.term}</strong>
+                      {term.category === 'PERSON' && term.term.trim().includes(' ') && (
+                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                          (matches full name, possessive, &amp; last name alone)
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#cbd5e1', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={term.enabled}
+                          onChange={(e) => handleToggleSensitiveTerm(term.id, e.target.checked)}
+                        />
+                        Active
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSensitiveTerm(term.id)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#f87171',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          padding: '4px 8px',
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 

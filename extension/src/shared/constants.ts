@@ -36,6 +36,7 @@ export const DEFAULT_SETTINGS: RatchetSettings = {
   enabled: true,
   sensitivity: 'medium',
   customRules: [],
+  sensitiveTerms: [],
   enabledSites: {
     chatgpt: true,
     claude: true,

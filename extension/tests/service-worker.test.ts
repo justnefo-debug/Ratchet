@@ -287,5 +287,40 @@ describe('Service Worker & Session Storage Mapping Pipeline', () => {
     expect(res.warnings.length).toBeGreaterThan(0);
     expect(res.warnings[0]).toContain('Dangerous Backtracking Rule');
   });
+
+  it('redacts sensitive terms, possessive variants, and last-name-alone in handleRedact', async () => {
+    localStorageMap.set('ratchet_settings', {
+      sensitiveTerms: [
+        {
+          id: 'st-1',
+          term: 'Alice Henderson',
+          category: 'PERSON',
+          enabled: true,
+        },
+        {
+          id: 'st-2',
+          term: 'Apex Cybernetics',
+          category: 'ORG',
+          enabled: true,
+        },
+      ],
+    });
+
+    const res = await handleRedact({
+      text: "Alice Henderson joined Apex Cybernetics. Also Henderson's team approved Apex Cybernetics's roadmap.",
+      conversationId: 'c-test-sensitive-terms',
+      siteOrigin: 'https://chatgpt.com',
+    });
+
+    expect(res.redactedText).not.toContain('Alice Henderson');
+    expect(res.redactedText).not.toContain("Henderson's");
+    expect(res.redactedText).not.toContain('Apex Cybernetics');
+    expect(res.redactedText).not.toContain("Apex Cybernetics's");
+    expect(res.redactedText).toContain('«PERSON_1»');
+    expect(res.redactedText).toContain('«ORG_1»');
+    expect(res.mappings.some((m) => m.original === 'Alice Henderson')).toBe(true);
+    expect(res.mappings.some((m) => m.original === "Henderson's")).toBe(true);
+    expect(res.mappings.some((m) => m.original === 'Apex Cybernetics')).toBe(true);
+  });
 });
 

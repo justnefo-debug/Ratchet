@@ -1169,6 +1169,93 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
     });
     await client.detach();
   });
+
+  // ─── Test 20: "My Sensitive Terms" Matching & Wire Zero-Leakage ──────────
+  test('20: "My sensitive terms" in Options: matches names, employers, projects, places with possessives and last-name alone variants, leaving zero wire leakage', async () => {
+    // 1. Verify Options Page UI renders the sensitive storage security disclosure notice
+    const optionsPage = await context.newPage();
+    await optionsPage.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+    await optionsPage.waitForLoadState('domcontentloaded');
+
+    const noticeEl = optionsPage.locator('#sensitive-terms-storage-notice');
+    await expect(noticeEl).toBeVisible();
+    expect(await noticeEl.innerText()).toContain('stored locally on this machine and is itself sensitive');
+
+    await optionsPage.close();
+
+    // 2. Configure sensitive terms
+    await updateSettings({
+      reviewBeforeSend: false,
+      reviewSites: { chatgpt: true, claude: true, mock: false },
+      sensitiveTerms: [
+        {
+          id: 'term-marcus',
+          term: 'Marcus Vance',
+          category: 'PERSON',
+          enabled: true,
+        },
+        {
+          id: 'term-solaria',
+          term: 'Solaria Dynamics',
+          category: 'ORG',
+          enabled: true,
+        },
+        {
+          id: 'term-chimera',
+          term: 'Project Chimera',
+          category: 'PROJECT',
+          enabled: true,
+        },
+        {
+          id: 'term-kyoto',
+          term: 'Kyoto',
+          category: 'LOCATION',
+          enabled: true,
+        },
+      ],
+    });
+
+    const convId = 'conv-sensitive-terms-e2e';
+    await page.goto(`http://127.0.0.1:${PORT}/?c=${convId}`);
+    await page.waitForLoadState('networkidle');
+    server.clearLoggedRequests();
+
+    const sensitivePrompt =
+      "Consulting with Marcus Vance on Project Chimera for Solaria Dynamics in Kyoto. Also Vance's team confirmed Solaria Dynamics's timeline.";
+    await page.locator('#prompt-textarea').fill(sensitivePrompt);
+    await page.locator('#send-textarea-btn').click();
+    await expect(page.locator('#status')).toHaveText('Completed', { timeout: 15000 });
+
+    // 3. Inspect wire request: must NOT contain ANY raw sensitive terms or variants
+    expect(server.loggedRequests.length).toBe(1);
+    const wireBody = server.loggedRequests[0].body;
+
+    // Strict zero-leakage assertions:
+    expect(wireBody).not.toContain('Marcus Vance');
+    expect(wireBody).not.toContain('Vance');
+    expect(wireBody).not.toContain("Vance's");
+    expect(wireBody).not.toContain('Solaria Dynamics');
+    expect(wireBody).not.toContain("Solaria Dynamics's");
+    expect(wireBody).not.toContain('Project Chimera');
+    expect(wireBody).not.toContain('Kyoto');
+
+    // Placeholders must be present on the wire
+    expect(wireBody).toContain('«PERSON_1»');
+    expect(wireBody).toContain('«PROJECT_1»');
+    expect(wireBody).toContain('«ORG_1»');
+    expect(wireBody).toContain('«LOCATION_1»');
+
+    // 4. Assert restored display in DOM
+    const assistantMsg = page.locator('.assistant-message').last();
+    await expect(assistantMsg).toBeVisible();
+    await expect(assistantMsg).toContainText('Marcus Vance');
+    await expect(assistantMsg).toContainText('Solaria Dynamics');
+    await expect(assistantMsg).toContainText('Project Chimera');
+    await expect(assistantMsg).toContainText('Kyoto');
+
+    // Clean up
+    await updateSettings({ sensitiveTerms: [] });
+  });
 });
 
 
