@@ -484,6 +484,25 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
     expect(server.loggedRequests[0].body).toContain('«EMAIL_1»');
     expect(server.loggedRequests[0].body).not.toContain(persistentEmail);
 
+    // 2b. Assert that chrome.storage.local contains ciphertext and NOT the plain values
+    const currentWorker = context.serviceWorkers()[0] || (await context.waitForEvent('serviceworker'));
+    const storageDump = await currentWorker.evaluate(() => {
+      return new Promise<Record<string, any>>((resolve) => {
+        chrome.storage.local.get(null, (items) => resolve(items));
+      });
+    });
+
+    const encRecord = storageDump[`enc:conv:${convId}`];
+    expect(encRecord).toBeDefined();
+    expect(typeof encRecord.ciphertext).toBe('string');
+    expect(encRecord.ciphertext.length).toBeGreaterThan(16);
+    expect(typeof encRecord.iv).toBe('string');
+    expect(encRecord.iv.length).toBeGreaterThan(8);
+    // Crucial threat model check: plaintext must NEVER appear in the persisted record
+    const dumpedRecordStr = JSON.stringify(encRecord);
+    expect(dumpedRecordStr).not.toContain(persistentEmail);
+    expect(dumpedRecordStr).not.toContain('dr.who');
+
     // 3. Fully close and reopen the browser context (wipes all in-memory chrome.storage.session)
     await context.close();
 

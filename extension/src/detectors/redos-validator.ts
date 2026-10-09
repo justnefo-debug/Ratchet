@@ -36,8 +36,31 @@ export function validateRegexSafety(pattern: string): ReDoSValidationResult {
     };
   }
 
+  // 2b. Static check for dangerous repeated alternation groups e.g. (a|aa)+, (b|bb)+, ([a-z]|[a-z0-9])+
+  const repeatedAlternation = /\([^)]*\|[^)]*\)[+*{]/;
+  if (repeatedAlternation.test(pattern)) {
+    return {
+      valid: false,
+      error: 'Pattern rejected: dangerous repeated alternation group detected (ReDoS risk)',
+    };
+  }
+
+  // 2c. Static check for dangerous repeated wildcards e.g. (.*)+, (.+)+
+  const repeatedWildcard = /\(\.?\*[+*]/;
+  if (repeatedWildcard.test(pattern)) {
+    return {
+      valid: false,
+      error: 'Pattern rejected: dangerous repeated wildcard detected (ReDoS risk)',
+    };
+  }
+
   // 3. Dynamic timing check against adversarial strings
+  const chars = Array.from(new Set(pattern.replace(/[^a-zA-Z0-9]/g, ''))).slice(0, 3);
+  const targetChar = chars[0] || 'a';
+
   const testInputs = [
+    targetChar.repeat(25) + '!',
+    targetChar.repeat(35) + '!',
     'a'.repeat(25) + '!',
     'a'.repeat(35) + '!',
     '0123456789'.repeat(3) + '!',

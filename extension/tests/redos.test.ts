@@ -164,6 +164,24 @@ describe('Custom Rules Runtime Time Guard', () => {
     expect(result.entities.length).toBe(1);
     expect(result.entities[0].value).toBe('PROJ-1234');
   });
+
+  it('terminates and skips a pattern that bypasses naive static checks but causes catastrophic backtracking on specific input', async () => {
+    // Pattern: (b|bb)+$ has no nested quantifiers, but on 30 'b's + '!' it backtracks 2^30 times.
+    const sneakyPattern = '(b|bb)+$';
+    const adversarialText = 'b'.repeat(30) + '!';
+
+    // 1. Verify our updated syntax validator rejects it as an unsafe repeated alternation
+    const validation = validateRegexSafety(sneakyPattern);
+    expect(validation.valid).toBe(false);
+    expect(validation.error).toContain('repeated alternation group');
+
+    // 2. Verify that if executed via worker runner with a 25ms cutoff,
+    // worker.terminate() forcibly kills the stuck regex and reports timedOut: true
+    const { matchRegexWithWorkerTimeout } = await import('../src/detectors/regex-worker-runner');
+    const runResult = await matchRegexWithWorkerTimeout(sneakyPattern, adversarialText, 25);
+    expect(runResult.timedOut).toBe(true);
+    expect(runResult.matches.length).toBe(0);
+  });
 });
 
 
