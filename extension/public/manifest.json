@@ -12,9 +12,7 @@
     "https://chatgpt.com/*",
     "https://chat.openai.com/*",
     "https://claude.ai/*",
-    "https://gemini.google.com/*",
-    "http://localhost/*",
-    "http://127.0.0.1/*"
+    "https://gemini.google.com/*"
   ],
   "action": {
     "default_popup": "src/popup/popup.html",
@@ -34,9 +32,7 @@
         "https://chatgpt.com/*",
         "https://chat.openai.com/*",
         "https://claude.ai/*",
-        "https://gemini.google.com/*",
-        "http://localhost/*",
-        "http://127.0.0.1/*"
+        "https://gemini.google.com/*"
       ],
       "js": ["assets/interceptor-main.js"],
       "world": "MAIN",
@@ -47,9 +43,7 @@
         "https://chatgpt.com/*",
         "https://chat.openai.com/*",
         "https://claude.ai/*",
-        "https://gemini.google.com/*",
-        "http://localhost/*",
-        "http://127.0.0.1/*"
+        "https://gemini.google.com/*"
       ],
       "js": ["assets/content.js"],
       "world": "ISOLATED",

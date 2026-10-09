@@ -129,3 +129,8 @@ export interface SiteAdapter {
   /** Return a new SSE data payload with the response text replaced. */
   replaceResponseText(eventData: string, restoredText: string): string;
 }
+
+declare global {
+  const __TEST_BUILD__: boolean;
+}
+

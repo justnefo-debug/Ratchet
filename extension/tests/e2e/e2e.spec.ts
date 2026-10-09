@@ -19,7 +19,7 @@ import os from 'os';
 import { MockChatServer } from '../mock-chat-server';
 
 const PORT = 3456;
-const extensionDistPath = path.resolve(__dirname, '../../dist');
+const extensionDistPath = path.resolve(__dirname, '../../dist-test');
 
 test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
   let server: MockChatServer;
@@ -67,6 +67,28 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
     } catch {
       // Ignore cleanup errors
     }
+  });
+
+  // ─── Test 0: Production Manifest vs Test Manifest Audit ───────────────────
+  test('0: Production dist/manifest.json contains NO localhost or 127.0.0.1 entries', () => {
+    const prodManifestPath = path.resolve(__dirname, '../../dist/manifest.json');
+    expect(fs.existsSync(prodManifestPath), 'Production dist/manifest.json must exist').toBe(true);
+
+    const prodManifest = JSON.parse(fs.readFileSync(prodManifestPath, 'utf-8'));
+    const prodManifestStr = JSON.stringify(prodManifest);
+
+    // Production manifest MUST NOT contain localhost or 127.0.0.1
+    expect(prodManifestStr).not.toContain('localhost');
+    expect(prodManifestStr).not.toContain('127.0.0.1');
+
+    // Test build manifest (dist-test) MUST contain localhost for mock endpoints
+    const testManifestPath = path.resolve(__dirname, '../../dist-test/manifest.json');
+    expect(fs.existsSync(testManifestPath), 'Test dist-test/manifest.json must exist').toBe(true);
+
+    const testManifest = JSON.parse(fs.readFileSync(testManifestPath, 'utf-8'));
+    const testManifestStr = JSON.stringify(testManifest);
+    expect(testManifestStr).toContain('localhost');
+    expect(testManifestStr).toContain('127.0.0.1');
   });
 
   // ─── Test 1, 2, 3: Full Conversation Flow with Textarea & ContentEditable ───

@@ -15,8 +15,12 @@ export * from './mock';
 const ADAPTERS: SiteAdapter[] = [
   new ChatGPTAdapter(),
   new ClaudeAdapter(),
-  new MockSiteAdapter(),
 ];
+
+// MockSiteAdapter exists only in test builds, never in production dist/
+if (typeof __TEST_BUILD__ !== 'undefined' && __TEST_BUILD__) {
+  ADAPTERS.push(new MockSiteAdapter());
+}
 
 /**
  * Find the matching site adapter for a given URL (typically window.location.href).
