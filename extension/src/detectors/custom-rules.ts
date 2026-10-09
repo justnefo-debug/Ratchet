@@ -10,7 +10,7 @@ import { validateRegexSafety } from './redos-validator';
 
 export const CUSTOM_RULE_BUDGET_MS = 25; // 25ms per-rule budget
 export const SCAN_CHUNK_SIZE = 10000;
-export const SCAN_CHUNK_OVERLAP = 500;
+export const SCAN_CHUNK_OVERLAP = 1000;
 
 export type CustomRulesDetectionResult = DetectedEntity[] & {
   entities: DetectedEntity[];

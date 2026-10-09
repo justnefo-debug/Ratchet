@@ -242,6 +242,51 @@ describe('Custom Rules Runtime Time Guard', () => {
     expect(res[0].start).toBe(50000 - targetMatch.length);
     expect(res[0].end).toBe(50000);
   });
+
+  it('rejects regex patterns with quantifier bounds exceeding 1000 characters', () => {
+    const excessiveBoundPattern = '\\bTOKEN-[a-z]{1,2000}\\b';
+    const result = validateRegexSafety(excessiveBoundPattern);
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('exceeds maximum limit of 1000 characters');
+
+    const exactBoundPattern = '\\bTOKEN-[a-z]{1,1000}\\b';
+    const validResult = validateRegexSafety(exactBoundPattern);
+    expect(validResult.valid).toBe(true);
+  });
+
+  it('successfully detects a match spanning across a chunk boundary (index 10,000) via chunk overlap', () => {
+    // Chunk 0 ends at 10,000. Chunk 1 starts at 9,000 (overlap = 1,000).
+    // Place a match spanning index 10,000: from index 9,990 to 10,016 (length 26).
+    const token = 'BOUNDARY-MATCH-TOKEN-12345';
+    const prefix = 'a'.repeat(9990);
+    const suffix = 'b'.repeat(5000);
+    const promptText = prefix + token + suffix;
+
+    expect(promptText.length).toBe(9990 + token.length + 5000);
+    expect(promptText.indexOf(token)).toBe(9990);
+    // Token starts at 9990 and ends at 10016, exactly crossing the 10,000 chunk boundary
+    expect(9990).toBeLessThan(10000);
+    expect(9990 + token.length).toBeGreaterThan(10000);
+
+    const rule: CustomRule = {
+      id: 'boundary-rule',
+      name: 'Boundary Spanning Pattern',
+      category: 'PROJECT',
+      type: 'regex',
+      pattern: 'BOUNDARY-MATCH-TOKEN-\\d{5}',
+      enabled: true,
+      confidence: 0.95,
+    };
+
+    const res = detectWithCustomRules(promptText, [rule], 50);
+
+    expect(res.skippedRules.length).toBe(0);
+    expect(res.length).toBe(1);
+    expect(res[0].type).toBe('PROJECT');
+    expect(res[0].value).toBe(token);
+    expect(res[0].start).toBe(9990);
+    expect(res[0].end).toBe(9990 + token.length);
+  });
 });
 
 

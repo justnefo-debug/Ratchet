@@ -13,6 +13,7 @@ export interface ReDoSValidationResult {
 }
 
 export const MAX_REGEX_PATTERN_LENGTH = 200;
+export const MAX_QUANTIFIER_BOUND = 1000;
 
 /**
  * Validates a regex pattern against syntax errors and catastrophic backtracking (ReDoS).
@@ -35,6 +36,25 @@ export function validateRegexSafety(pattern: string): ReDoSValidationResult {
     new RegExp(pattern, 'g');
   } catch (err: any) {
     return { valid: false, error: `Invalid regular expression: ${err.message}` };
+  }
+
+  // 1b. Check for quantifiers exceeding maximum bound limit (MAX_QUANTIFIER_BOUND)
+  const quantifierMatches = pattern.match(/\{(\d+)(?:,(\d*))?\}/g);
+  if (quantifierMatches) {
+    for (const q of quantifierMatches) {
+      const inner = q.slice(1, -1);
+      const parts = inner.split(',');
+      const upperStr = parts.length > 1 ? parts[1] : parts[0];
+      if (upperStr) {
+        const bound = parseInt(upperStr, 10);
+        if (bound > MAX_QUANTIFIER_BOUND) {
+          return {
+            valid: false,
+            error: `Pattern rejected: quantifier bound ${q} exceeds maximum limit of ${MAX_QUANTIFIER_BOUND} characters`,
+          };
+        }
+      }
+    }
   }
 
   // 2. Static heuristic check for dangerous nested quantifiers e.g. (a+)+, ([0-9]*)*, (x+)*
