@@ -26,6 +26,7 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
   let context: BrowserContext;
   let page: Page;
   let tempUserDataDir: string;
+  let extensionId: string;
 
   test.beforeAll(async () => {
     // 1. Start mock chat server
@@ -51,6 +52,7 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
       worker = await context.waitForEvent('serviceworker');
     }
     expect(worker).toBeTruthy();
+    extensionId = worker.url().split('/')[2];
 
     page = await context.newPage();
   });
@@ -259,4 +261,59 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
     // 3. Page status reflects error
     await expect(page.locator('#status')).toContainText('Error:');
   });
+
+  // ─── Test 6: Options Page UI (ReDoS Validation, Entity Toggles, Clear Mappings) ───
+  test('6: Options page validates ReDoS in UI, adds safe custom rule, and executes clear-all-mappings', async () => {
+    const optionsPage = await context.newPage();
+    await optionsPage.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+    await optionsPage.waitForLoadState('domcontentloaded');
+
+    // 1. Verify general controls loaded
+    await expect(optionsPage.locator('#sensitivity-select')).toBeVisible();
+    await expect(optionsPage.locator('#entity-toggle-EMAIL')).toBeVisible();
+
+    // 2. ReDoS validation in UI: Type catastrophic regex pattern
+    await optionsPage.locator('#new-rule-name').fill('Malicious Test Pattern');
+    await optionsPage.locator('#new-rule-category').fill('MALICIOUS');
+    await optionsPage.locator('#new-rule-pattern').fill('(a+)+$');
+
+    // Assert validation error appears and Add Rule button is disabled
+    const validationStatus = optionsPage.locator('#rule-validation-status');
+    await expect(validationStatus).toBeVisible();
+    await expect(validationStatus).toContainText('ReDoS risk');
+    await expect(optionsPage.locator('#add-rule-btn')).toBeDisabled();
+
+    // 3. Enter safe regex pattern
+    await optionsPage.locator('#new-rule-pattern').fill('PRJ-[0-9]{4}');
+    await expect(validationStatus).toContainText('Safe regex pattern');
+    await expect(optionsPage.locator('#add-rule-btn')).toBeEnabled();
+
+    // 4. Click Add Rule
+    await optionsPage.locator('#add-rule-btn').click();
+    await expect(optionsPage.locator('.rule-item')).toContainText('Malicious Test Pattern');
+    await expect(optionsPage.locator('.rule-item')).toContainText('PRJ-[0-9]{4}');
+
+    // 5. Test Clear All Conversation Mappings danger zone button
+    await optionsPage.locator('#clear-all-mappings-btn').click();
+    const clearStatus = optionsPage.locator('#clear-status-msg');
+    await expect(clearStatus).toBeVisible();
+    await expect(clearStatus).toContainText('All conversation mappings cleared');
+
+    await optionsPage.close();
+  });
+
+  // ─── Test 7: Popup UI renders live data and controls ───
+  test('7: Popup UI renders status, controls, and session category summary', async () => {
+    const popupPage = await context.newPage();
+    await popupPage.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
+    await popupPage.waitForLoadState('domcontentloaded');
+
+    await expect(popupPage.locator('#global-shield-toggle')).toBeVisible();
+    await expect(popupPage.locator('#sensitivity-selector')).toBeVisible();
+    await expect(popupPage.locator('#session-total-redacted')).toBeVisible();
+    await expect(popupPage.locator('#open-options-btn')).toBeVisible();
+
+    await popupPage.close();
+  });
 });
+
