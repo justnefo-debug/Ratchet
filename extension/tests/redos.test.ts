@@ -208,6 +208,40 @@ describe('Custom Rules Runtime Time Guard', () => {
     expect(res.warnings[0]).toContain('Unsafe Backtracker');
     expect(res.warnings[0]).toContain('violates ReDoS-safe subset');
   });
+
+  it('scans a 50,000-character prompt in overlapping chunks and detects a sensitive match at the very end', () => {
+    // Generate 50,000 characters of realistic prose with the sensitive token placed at the very end
+    const filler = 'The quick brown fox jumps over the lazy dog. ';
+    const targetMatch = 'SECRET-99881';
+    const fillerLength = 50000 - targetMatch.length;
+    const promptText = filler.repeat(Math.ceil(fillerLength / filler.length)).slice(0, fillerLength) + targetMatch;
+
+    expect(promptText.length).toBe(50000);
+    expect(promptText.endsWith(targetMatch)).toBe(true);
+
+    const rule: CustomRule = {
+      id: 'end-match-rule',
+      name: 'Project Secret Pattern',
+      category: 'API_KEY',
+      type: 'regex',
+      pattern: 'SECRET-\\d{5}',
+      enabled: true,
+      confidence: 0.99,
+    };
+
+    const res = detectWithCustomRules(promptText, [rule], 50);
+
+    // Verify rule was not skipped or timed out
+    expect(res.skippedRules.length).toBe(0);
+    expect(res.warnings.length).toBe(0);
+
+    // Verify entity was detected accurately at the very end
+    expect(res.length).toBe(1);
+    expect(res[0].type).toBe('API_KEY');
+    expect(res[0].value).toBe(targetMatch);
+    expect(res[0].start).toBe(50000 - targetMatch.length);
+    expect(res[0].end).toBe(50000);
+  });
 });
 
 
