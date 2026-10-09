@@ -160,9 +160,9 @@ export async function decryptMapping(
     const ivBytes = base64ToBuffer(record.iv);
 
     const decryptedBuffer = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: ivBytes },
+      { name: 'AES-GCM', iv: ivBytes as any },
       key,
-      cipherBytes,
+      cipherBytes as any,
     );
 
     const text = new TextDecoder().decode(decryptedBuffer);

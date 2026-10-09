@@ -16,16 +16,22 @@ import {
   migrateConversationMapping,
   getSettings,
   updateStats,
+  clearAllMappings,
+  getSessionStats,
+  recordSessionRedaction,
 } from './storage';
 import { SENSITIVITY_THRESHOLDS } from '../shared/constants';
 import type { DetectedEntity } from '../shared/types';
 
-chrome.runtime.onInstalled.addListener(() => {
-  console.log('🛡️ Ratchet Privacy Shield installed');
-});
+if (typeof chrome !== 'undefined' && chrome.runtime?.onInstalled) {
+  chrome.runtime.onInstalled.addListener(() => {
+    console.log('🛡️ Ratchet Privacy Shield installed');
+  });
+}
 
-chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
-  if (request.action === 'redact') {
+if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+  chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+    if (request.action === 'redact') {
     handleRedact(request)
       .then((data) => sendResponse({ success: true, data }))
       .catch((err) => sendResponse({ success: false, error: err.toString() }));
@@ -59,21 +65,57 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
       .catch((err) => sendResponse({ success: false, error: err.toString() }));
     return true;
   }
-});
+
+  if (request.action === 'getSessionStats') {
+    getSessionStats()
+      .then((stats) => sendResponse({ success: true, data: stats }))
+      .catch((err) => sendResponse({ success: false, error: err.toString() }));
+    return true;
+  }
+
+  if (request.action === 'clearAllMappings') {
+    clearAllMappings()
+      .then(() => sendResponse({ success: true }))
+      .catch((err) => sendResponse({ success: false, error: err.toString() }));
+    return true;
+  }
+  });
+}
+
+export function isSiteEnabled(siteOrigin: string, enabledSites: Record<string, boolean>): boolean {
+  if (!siteOrigin) return true;
+  const lower = siteOrigin.toLowerCase();
+  if (lower.includes('chatgpt.com') || lower.includes('chat.openai.com')) {
+    return enabledSites.chatgpt !== false;
+  }
+  if (lower.includes('claude.ai')) {
+    return enabledSites.claude !== false;
+  }
+  if (lower.includes('gemini.google.com')) {
+    return enabledSites.gemini !== false;
+  }
+  if (lower.includes('localhost') || lower.includes('127.0.0.1')) {
+    return enabledSites.mock !== false;
+  }
+  return true;
+}
 
 /**
  * Handle redaction request.
  */
-async function handleRedact(request: {
+export async function handleRedact(request: {
   text?: string;
   conversationId?: string;
   siteOrigin?: string;
 }) {
   const text = request.text || '';
   const conversationId = request.conversationId || 'default';
+  const siteOrigin = request.siteOrigin || '';
 
   const settings = await getSettings();
-  if (!settings.enabled || !text) {
+
+  // Check global toggle, per-site toggle, and non-empty text
+  if (!settings.enabled || !isSiteEnabled(siteOrigin, settings.enabledSites || {}) || !text) {
     return {
       redactedText: text,
       mappings: [],
@@ -126,17 +168,23 @@ async function handleRedact(request: {
     }
   }
 
-  // 3. Filter by sensitivity confidence threshold
-  const minConfidence = SENSITIVITY_THRESHOLDS[settings.sensitivity] ?? 0.65;
-  const filteredEntities = allEntities.filter((e) => e.confidence >= minConfidence);
+  // 3. Filter by per-entity toggles
+  const entityToggles = settings.entityToggles || {};
+  const activeEntities = allEntities.filter(
+    (e) => entityToggles[e.type] !== false,
+  );
 
-  // 4. Resolve overlapping intervals
+  // 4. Filter by sensitivity confidence threshold
+  const minConfidence = SENSITIVITY_THRESHOLDS[settings.sensitivity] ?? 0.65;
+  const filteredEntities = activeEntities.filter((e) => e.confidence >= minConfidence);
+
+  // 5. Resolve overlapping intervals
   const cleanEntities = deduplicateOverlaps(filteredEntities);
 
-  // 5. Redact text and assign placeholders
+  // 6. Redact text and assign placeholders
   const { redactedText, mappings } = redact(text, cleanEntities, existingMappings);
 
-  // 6. Save updated mappings in session storage
+  // 7. Save updated mappings in session storage (and optional persistent storage)
   await saveConversationMapping({
     conversationId,
     siteOrigin: request.siteOrigin || convMap?.siteOrigin || '',
@@ -145,14 +193,15 @@ async function handleRedact(request: {
     lastUsedAt: Date.now(),
   });
 
-  // 7. Calculate entity counts by type
+  // 8. Calculate entity counts by type
   const entityCounts: Record<string, number> = {};
   for (const ent of cleanEntities) {
     entityCounts[ent.type] = (entityCounts[ent.type] || 0) + 1;
   }
 
-  // 8. Update telemetry stats
+  // 9. Update telemetry and session stats by category
   await updateStats(cleanEntities.length, cleanEntities.length);
+  await recordSessionRedaction(cleanEntities);
 
   return {
     redactedText,
@@ -166,7 +215,7 @@ async function handleRedact(request: {
 /**
  * Handle restoration request.
  */
-async function handleRestore(request: {
+export async function handleRestore(request: {
   text?: string;
   conversationId?: string;
 }) {

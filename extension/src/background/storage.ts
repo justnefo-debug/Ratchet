@@ -188,3 +188,53 @@ export async function updateStats(
     });
   });
 }
+
+export interface SessionStats {
+  totalDetected: number;
+  totalRedacted: number;
+  byCategory: Record<string, number>;
+}
+
+export const STORAGE_KEY_SESSION_STATS = 'session_stats';
+
+/**
+ * Retrieve current session statistics from chrome.storage.session.
+ */
+export async function getSessionStats(): Promise<SessionStats> {
+  const defaultStats: SessionStats = {
+    totalDetected: 0,
+    totalRedacted: 0,
+    byCategory: {},
+  };
+
+  if (!chrome?.storage?.session) return defaultStats;
+
+  return new Promise((resolve) => {
+    chrome.storage.session.get([STORAGE_KEY_SESSION_STATS], (result) => {
+      resolve(result[STORAGE_KEY_SESSION_STATS] || defaultStats);
+    });
+  });
+}
+
+/**
+ * Update real-time session stats categorized by entity type.
+ */
+export async function recordSessionRedaction(
+  entities: { type: string }[],
+): Promise<SessionStats> {
+  const current = await getSessionStats();
+  current.totalDetected += entities.length;
+  current.totalRedacted += entities.length;
+
+  for (const ent of entities) {
+    current.byCategory[ent.type] = (current.byCategory[ent.type] || 0) + 1;
+  }
+
+  if (chrome?.storage?.session) {
+    await new Promise<void>((resolve) => {
+      chrome.storage.session.set({ [STORAGE_KEY_SESSION_STATS]: current }, () => resolve());
+    });
+  }
+
+  return current;
+}
