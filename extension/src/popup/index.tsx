@@ -78,6 +78,22 @@ const Popup = () => {
     saveSettings({ ...settings, sensitivity });
   };
 
+  const handleSiteReviewToggle = (enabled: boolean) => {
+    if (!currentSiteKey) return;
+    const reviewSites = {
+      chatgpt: true,
+      claude: true,
+      gemini: true,
+      ...settings.reviewSites,
+      [currentSiteKey]: enabled,
+    };
+    saveSettings({ ...settings, reviewSites });
+  };
+
+  const isCurrentSiteReviewActive = currentSiteKey
+    ? (settings.reviewSites as any)?.[currentSiteKey] !== false
+    : true;
+
   const isCurrentSiteActive = currentSiteKey
     ? (settings.enabledSites as any)[currentSiteKey] !== false
     : true;
@@ -113,6 +129,17 @@ const Popup = () => {
                 type="checkbox"
                 checked={isCurrentSiteActive}
                 onChange={(e) => handleSiteToggle(e.target.checked)}
+              />
+            </label>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #334155' }}>
+            <span style={{ fontSize: '12px', color: '#cbd5e1' }}>Review before sending</span>
+            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+              <input
+                id="site-review-toggle"
+                type="checkbox"
+                checked={isCurrentSiteReviewActive}
+                onChange={(e) => handleSiteReviewToggle(e.target.checked)}
               />
             </label>
           </div>

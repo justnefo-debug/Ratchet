@@ -692,6 +692,408 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
     });
     await cleanupPage.close();
   });
+
+  // ─── Helpers for Closed Shadow DOM Inspection & Interaction via CDP ────
+  function findNodeByPredicate(node: any, predicate: (n: any) => boolean): any | null {
+    if (!node) return null;
+    if (predicate(node)) return node;
+    if (node.children) {
+      for (const child of node.children) {
+        const found = findNodeByPredicate(child, predicate);
+        if (found) return found;
+      }
+    }
+    if (node.shadowRoots) {
+      for (const sr of node.shadowRoots) {
+        const found = findNodeByPredicate(sr, predicate);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  function findAllNodesByPredicate(node: any, predicate: (n: any) => boolean, results: any[] = []): any[] {
+    if (!node) return results;
+    if (predicate(node)) results.push(node);
+    if (node.children) {
+      for (const child of node.children) {
+        findAllNodesByPredicate(child, predicate, results);
+      }
+    }
+    if (node.shadowRoots) {
+      for (const sr of node.shadowRoots) {
+        findAllNodesByPredicate(sr, predicate, results);
+      }
+    }
+    return results;
+  }
+
+  function getNodeAttr(node: any, attrName: string): string | null {
+    if (!node?.attributes) return null;
+    for (let i = 0; i < node.attributes.length; i += 2) {
+      if (node.attributes[i].toLowerCase() === attrName.toLowerCase()) {
+        return node.attributes[i + 1];
+      }
+    }
+    return null;
+  }
+
+  function getNodeText(node: any): string {
+    let text = '';
+    if (node.nodeType === 3) {
+      text += node.nodeValue || '';
+    }
+    if (node.children) {
+      for (const c of node.children) {
+        text += getNodeText(c);
+      }
+    }
+    return text;
+  }
+
+  async function getCdpShadowRoot(page: Page) {
+    const client = await page.context().newCDPSession(page);
+    await client.send('DOM.enable');
+    const { root } = await client.send('DOM.getDocument', { depth: -1, pierce: true });
+    const hostNode = findNodeByPredicate(root, (n) => getNodeAttr(n, 'id') === 'ratchet-review-host');
+    expect(hostNode, 'Host element #ratchet-review-host should exist in DOM').toBeTruthy();
+    const shadowRoot = hostNode.shadowRoots ? hostNode.shadowRoots[0] : null;
+    expect(shadowRoot, 'Closed shadow root should be present on host in CDP').toBeTruthy();
+    return { client, root, hostNode, shadowRoot };
+  }
+
+  async function clickCdpNode(client: any, page: Page, node: any) {
+    expect(node, 'Node to click must exist').toBeTruthy();
+    const { model } = await client.send('DOM.getBoxModel', { nodeId: node.nodeId });
+    const centerX = (model.content[0] + model.content[2]) / 2;
+    const centerY = (model.content[1] + model.content[5]) / 2;
+    await page.mouse.click(centerX, centerY);
+  }
+
+  async function updateSettings(settingsToApply: any) {
+    const managePage = await context.newPage();
+    await managePage.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+    await managePage.evaluate(async (updates) => {
+      const data: any = await chrome.storage.local.get('ratchet_settings');
+      const settings = data.ratchet_settings || {};
+      Object.assign(settings, updates);
+      await chrome.storage.local.set({ ratchet_settings: settings });
+    }, settingsToApply);
+    await managePage.close();
+  }
+
+  // ─── Test 13: Review Panel Renders Detected Items & Sends Redacted (Enter) ───
+  test('13: Review panel displays detected items with category/original/placeholder and sends redacted on Enter', async () => {
+    // Enable review for mock site
+    await updateSettings({
+      reviewBeforeSend: true,
+      reviewSites: { chatgpt: true, claude: true, gemini: true, mock: true },
+      reviewTimeoutSeconds: 60,
+    });
+
+    const convId = 'conv-review-display';
+    await page.goto(`http://127.0.0.1:${PORT}/?c=${convId}`);
+    await page.waitForLoadState('networkidle');
+    server.clearLoggedRequests();
+
+    const promptText = 'Please contact Dr. Tariq Mehmood at tariq.mehmood@example.com.';
+    await page.locator('#prompt-textarea').fill(promptText);
+    await page.locator('#send-textarea-btn').click();
+
+    // 1. Wait for review panel host to appear in DOM
+    await page.waitForSelector('#ratchet-review-host', { state: 'attached', timeout: 5000 });
+
+    // 2. Inspect closed Shadow DOM contents via CDP
+    const { client, shadowRoot } = await getCdpShadowRoot(page);
+
+    // Verify title and banner
+    const titleNode = findNodeByPredicate(shadowRoot, (n) => getNodeAttr(n, 'id') === 'ratchet-panel-title');
+    expect(titleNode).toBeTruthy();
+    expect(getNodeText(titleNode)).toContain('Review Outgoing Prompt');
+
+    // Verify detected item cards
+    const cardNodes = findAllNodesByPredicate(shadowRoot, (n) => {
+      const cls = getNodeAttr(n, 'class');
+      return cls ? cls.includes('item-card') : false;
+    });
+    expect(cardNodes.length).toBe(2);
+
+    // Verify both items (PERSON and EMAIL) are displayed with original and placeholder
+    const allCardsText = cardNodes.map((c) => getNodeText(c)).join(' --- ');
+    expect(allCardsText).toContain('PERSON');
+    expect(allCardsText).toContain('Tariq Mehmood');
+    expect(allCardsText).toContain('«PERSON_1»');
+    expect(allCardsText).toContain('EMAIL');
+    expect(allCardsText).toContain('tariq.mehmood@example.com');
+    expect(allCardsText).toContain('«EMAIL_1»');
+
+    // 3. Confirm with Enter key (default action: Send Redacted)
+    await page.keyboard.press('Enter');
+
+    // Verify panel closed
+    await page.waitForSelector('#ratchet-review-host', { state: 'detached', timeout: 5000 });
+
+    // Verify server received redacted request on the wire
+    await expect(page.locator('#status')).toHaveText('Completed', { timeout: 15000 });
+    expect(server.loggedRequests.length).toBe(1);
+    const wireBody = server.loggedRequests[0].body;
+    expect(wireBody).toContain('«PERSON_1»');
+    expect(wireBody).toContain('«EMAIL_1»');
+    expect(wireBody).not.toContain('Tariq Mehmood');
+    expect(wireBody).not.toContain('tariq.mehmood@example.com');
+
+    // Verify displayed reply restored real values
+    const assistantMsg = page.locator('.assistant-message').last();
+    await expect(assistantMsg).toContainText('Tariq Mehmood');
+    await expect(assistantMsg).toContainText('tariq.mehmood@example.com');
+
+    await client.detach();
+  });
+
+  // ─── Test 14: Un-redacting One Item Puts Only That Value on the Wire ──────
+  test('14: Un-redacting a single item transmits only that value unredacted while other items stay redacted', async () => {
+    await updateSettings({
+      reviewBeforeSend: true,
+      reviewSites: { chatgpt: true, claude: true, gemini: true, mock: true },
+      reviewTimeoutSeconds: 60,
+    });
+
+    const convId = 'conv-review-unredact';
+    await page.goto(`http://127.0.0.1:${PORT}/?c=${convId}`);
+    await page.waitForLoadState('networkidle');
+    server.clearLoggedRequests();
+
+    const promptText = 'Notify Dr. Tariq Mehmood via dev-alerts@internal.corp.';
+    await page.locator('#prompt-textarea').fill(promptText);
+    await page.locator('#send-textarea-btn').click();
+
+    // Wait for review panel
+    await page.waitForSelector('#ratchet-review-host', { state: 'attached', timeout: 5000 });
+    const { client, shadowRoot } = await getCdpShadowRoot(page);
+
+    // Find the item card that contains Tariq Mehmood
+    const cardNodes = findAllNodesByPredicate(shadowRoot, (n) => {
+      const cls = getNodeAttr(n, 'class');
+      return cls ? cls.includes('item-card') : false;
+    });
+    const personCard = cardNodes.find((c) => getNodeText(c).includes('Tariq Mehmood'));
+    expect(personCard, 'Card containing Tariq Mehmood should exist').toBeTruthy();
+
+    // Find "Un-redact" button on the Tariq Mehmood card
+    const unredactBtn = findNodeByPredicate(personCard, (n) => {
+      const cls = getNodeAttr(n, 'class');
+      return cls?.includes('btn-toggle-unredact');
+    });
+    expect(unredactBtn, 'Un-redact button must exist').toBeTruthy();
+
+    // Click Un-redact for card via CDP mouse click
+    await clickCdpNode(client, page, unredactBtn);
+
+    // Press Enter to Send Redacted (with Tariq Mehmood kept original)
+    await page.keyboard.press('Enter');
+
+    // Wait for completion
+    await expect(page.locator('#status')).toHaveText('Completed', { timeout: 15000 });
+
+    // Assert wire body:
+    // - Tariq Mehmood is UN-REDACTED (original value sent on the wire)
+    // - dev-alerts@internal.corp is REDACTED (placeholder «EMAIL_1» sent on the wire)
+    expect(server.loggedRequests.length).toBe(1);
+    const wireBody = server.loggedRequests[0].body;
+    expect(wireBody).toContain('Tariq Mehmood');
+    expect(wireBody).not.toContain('«PERSON_1»');
+    expect(wireBody).toContain('«EMAIL_1»');
+    expect(wireBody).not.toContain('dev-alerts@internal.corp');
+
+    await client.detach();
+  });
+
+  // ─── Test 15: Cancel (Esc) Sends Nothing and Leaves Chat UI Usable ────────
+  test('15: User cancel (Esc or button) sends nothing over the wire and leaves chat UI usable', async () => {
+    await updateSettings({
+      reviewBeforeSend: true,
+      reviewSites: { chatgpt: true, claude: true, gemini: true, mock: true },
+      reviewTimeoutSeconds: 60,
+    });
+
+    const convId = 'conv-review-cancel';
+    await page.goto(`http://127.0.0.1:${PORT}/?c=${convId}`);
+    await page.waitForLoadState('networkidle');
+    server.clearLoggedRequests();
+
+    const promptText = 'Send confidential code to security-lead@bank.com immediately.';
+    await page.locator('#prompt-textarea').fill(promptText);
+    await page.locator('#send-textarea-btn').click();
+
+    // Wait for review panel
+    await page.waitForSelector('#ratchet-review-host', { state: 'attached', timeout: 5000 });
+
+    // Press Escape to cancel
+    await page.keyboard.press('Escape');
+
+    // Assert panel closed
+    await page.waitForSelector('#ratchet-review-host', { state: 'detached', timeout: 5000 });
+
+    // Assert warning notice appeared
+    const notice = page.locator('#ratchet-warning-notice');
+    await expect(notice).toBeVisible({ timeout: 5000 });
+    expect(await notice.innerText()).toContain('prompt cancelled by user');
+
+    // Assert ZERO requests sent on the wire
+    expect(server.loggedRequests.length).toBe(0);
+
+    // Assert chat UI remains completely usable: user can edit and send a subsequent prompt
+    await page.locator('#prompt-textarea').fill('Send updated code to security-lead@bank.com immediately.');
+    expect(await page.locator('#prompt-textarea').inputValue()).toBe('Send updated code to security-lead@bank.com immediately.');
+  });
+
+  // ─── Test 16: Review Timeout Fails Closed ────────────────────────────────
+  test('16: Review timeout fails closed: blocks wire transmission, shows notice, and leaves chat UI usable', async () => {
+    // Configure a short 2-second review timeout
+    await updateSettings({
+      reviewBeforeSend: true,
+      reviewSites: { chatgpt: true, claude: true, gemini: true, mock: true },
+      reviewTimeoutSeconds: 2,
+    });
+
+    const convId = 'conv-review-timeout';
+    await page.goto(`http://127.0.0.1:${PORT}/?c=${convId}`);
+    await page.waitForLoadState('networkidle');
+    server.clearLoggedRequests();
+
+    const promptText = 'Important briefing for contact@partner.org in progress.';
+    await page.locator('#prompt-textarea').fill(promptText);
+    await page.locator('#send-textarea-btn').click();
+
+    // Wait for review panel to appear
+    await page.waitForSelector('#ratchet-review-host', { state: 'attached', timeout: 5000 });
+
+    // Do nothing and wait for the 2-second timeout to elapse and panel to detach
+    await page.waitForSelector('#ratchet-review-host', { state: 'detached', timeout: 7000 });
+
+    // Assert privacy notice displays review timeout block
+    const notice = page.locator('#ratchet-privacy-notice');
+    await expect(notice).toBeVisible({ timeout: 5000 });
+    expect(await notice.innerText()).toContain('review timed out');
+
+    // Assert fail-closed: NO request was dispatched to the server
+    expect(server.loggedRequests.length).toBe(0);
+
+    // Assert chat UI remains intact and usable: user can type new prompt
+    await page.locator('#prompt-textarea').fill('Follow-up after timeout');
+    expect(await page.locator('#prompt-textarea').inputValue()).toBe('Follow-up after timeout');
+
+    // Restore standard timeout
+    await updateSettings({ reviewTimeoutSeconds: 60 });
+  });
+
+  // ─── Test 17: Panel Contents Are Not Reachable from Page JS ──────────────
+  test('17: Panel contents and raw values are unreachable from page JS (closed Shadow DOM guarantee)', async () => {
+    await updateSettings({
+      reviewBeforeSend: true,
+      reviewSites: { chatgpt: true, claude: true, gemini: true, mock: true },
+      reviewTimeoutSeconds: 60,
+    });
+
+    const convId = 'conv-review-isolation';
+    await page.goto(`http://127.0.0.1:${PORT}/?c=${convId}`);
+    await page.waitForLoadState('networkidle');
+    server.clearLoggedRequests();
+
+    const promptText = 'Confidential password reset token for admin@shield.net.';
+    await page.locator('#prompt-textarea').fill(promptText);
+    await page.locator('#send-textarea-btn').click();
+
+    await page.waitForSelector('#ratchet-review-host', { state: 'attached', timeout: 5000 });
+
+    // Evaluate in MAIN world (simulating page JS / untrusted page scripts)
+    const pageJsAccess = await page.evaluate(() => {
+      const host = document.querySelector('#ratchet-review-host') as HTMLElement | null;
+      return {
+        hostExists: host !== null,
+        shadowRootIsNull: host ? host.shadowRoot === null : false,
+        innerTextEmpty: host ? host.innerText.trim() === '' : false,
+        innerHTMLTextEmpty: host ? host.innerHTML.trim() === '' : false,
+        querySelectorItemCard: document.querySelector('.item-card') !== null,
+        querySelectorOrigVal: document.querySelector('.orig-val') !== null,
+      };
+    });
+
+    // 1. Host exists in DOM
+    expect(pageJsAccess.hostExists).toBe(true);
+
+    // 2. host.shadowRoot is strictly null in page JS because mode: 'closed'
+    expect(pageJsAccess.shadowRootIsNull).toBe(true);
+
+    // 3. host innerText and innerHTML are empty in page JS
+    expect(pageJsAccess.innerTextEmpty).toBe(true);
+    expect(pageJsAccess.innerHTMLTextEmpty).toBe(true);
+
+    // 4. Page JS querySelector cannot pierce or find any inner card or original PII
+    expect(pageJsAccess.querySelectorItemCard).toBe(false);
+    expect(pageJsAccess.querySelectorOrigVal).toBe(false);
+
+    // Close panel with Escape
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('#ratchet-review-host', { state: 'detached', timeout: 5000 });
+  });
+
+  // ─── Test 18: Send As-Is with Confirmation Warning Transmits Plain Text ───
+  test('18: Send as-is action displays warning confirmation and transmits plain text if confirmed', async () => {
+    await updateSettings({
+      reviewBeforeSend: true,
+      reviewSites: { chatgpt: true, claude: true, gemini: true, mock: true },
+      reviewTimeoutSeconds: 60,
+    });
+
+    const convId = 'conv-review-asis';
+    await page.goto(`http://127.0.0.1:${PORT}/?c=${convId}`);
+    await page.waitForLoadState('networkidle');
+    server.clearLoggedRequests();
+
+    const promptText = 'Public support inquiry from public.user@domain.org.';
+    await page.locator('#prompt-textarea').fill(promptText);
+    await page.locator('#send-textarea-btn').click();
+
+    await page.waitForSelector('#ratchet-review-host', { state: 'attached', timeout: 5000 });
+    const { client, shadowRoot } = await getCdpShadowRoot(page);
+
+    // Click "Send As-Is" button in footer
+    const sendAsIsBtn = findNodeByPredicate(shadowRoot, (n) => getNodeAttr(n, 'id') === 'ratchet-btn-asis');
+    expect(sendAsIsBtn).toBeTruthy();
+    await clickCdpNode(client, page, sendAsIsBtn);
+
+    // Re-fetch shadow DOM to verify confirmation box became visible
+    const { shadowRoot: updatedRoot } = await getCdpShadowRoot(page);
+    const confirmBox = findNodeByPredicate(updatedRoot, (n) => getNodeAttr(n, 'id') === 'ratchet-confirm-asis-box');
+    expect(confirmBox).toBeTruthy();
+    const confirmCls = getNodeAttr(confirmBox, 'class');
+    expect(confirmCls).toContain('visible');
+    expect(getNodeText(confirmBox)).toContain('Send unredacted data over the wire?');
+
+    // Click "Send As-Is Now" confirmation button
+    const confirmYesBtn = findNodeByPredicate(updatedRoot, (n) => getNodeAttr(n, 'id') === 'ratchet-confirm-yes');
+    expect(confirmYesBtn).toBeTruthy();
+    await clickCdpNode(client, page, confirmYesBtn);
+
+    // Wait for completion
+    await expect(page.locator('#status')).toHaveText('Completed', { timeout: 15000 });
+
+    // Assert wire body contains plain text (sent as-is without placeholders)
+    expect(server.loggedRequests.length).toBe(1);
+    const wireBody = server.loggedRequests[0].body;
+    expect(wireBody).toContain('public.user@domain.org');
+    expect(wireBody).not.toContain('«EMAIL_1»');
+
+    // Reset settings for subsequent clean test runs
+    await updateSettings({
+      reviewBeforeSend: true,
+      reviewSites: { chatgpt: true, claude: true, gemini: true, mock: false },
+      reviewTimeoutSeconds: 60,
+    });
+
+    await client.detach();
+  });
 });
 
 

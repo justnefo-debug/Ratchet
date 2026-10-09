@@ -30,7 +30,7 @@ import { showPrivacyNotice, showWarningNotice } from './ui-notice';
   /**
    * Request-ID based communication channel with ISOLATED content script.
    */
-  function requestRedaction(prompt: string, convId: string, timeoutMs = 4000): Promise<string> {
+  function requestRedaction(prompt: string, convId: string, timeoutMs = 70000): Promise<string> {
     return new Promise((resolve, reject) => {
       const requestId = `req-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       let timer: ReturnType<typeof setTimeout> | null = null;
@@ -126,9 +126,16 @@ import { showPrivacyNotice, showWarningNotice } from './ui-notice';
 
     try {
       redactedText = await requestRedaction(extracted.prompt, convId);
-    } catch {
-      showPrivacyNotice('Ratchet: Outgoing request blocked (redaction failed or timed out).');
-      throw new Error('[Ratchet] Outgoing request blocked (redaction failed or timed out)');
+    } catch (err: any) {
+      const msg = err?.message || '';
+      if (msg.includes('cancelled')) {
+        showWarningNotice('Ratchet: Outgoing prompt cancelled by user.');
+      } else if (msg.includes('timed out')) {
+        showPrivacyNotice('Ratchet: Outgoing request blocked (review timed out).');
+      } else {
+        showPrivacyNotice('Ratchet: Outgoing request blocked (redaction failed or timed out).');
+      }
+      throw new Error(`[Ratchet] Outgoing request blocked (${msg})`);
     }
 
     const newBody = extracted.replaceWith(redactedText);
@@ -186,8 +193,15 @@ import { showPrivacyNotice, showWarningNotice } from './ui-notice';
         const newBody = extracted.replaceWith(redactedText);
         originalSend.call(this, newBody);
       })
-      .catch(() => {
-        showPrivacyNotice('Ratchet: Outgoing request blocked (redaction failed or timed out).');
+      .catch((err: any) => {
+        const msg = err?.message || '';
+        if (msg.includes('cancelled')) {
+          showWarningNotice('Ratchet: Outgoing prompt cancelled by user.');
+        } else if (msg.includes('timed out')) {
+          showPrivacyNotice('Ratchet: Outgoing request blocked (review timed out).');
+        } else {
+          showPrivacyNotice('Ratchet: Outgoing request blocked (redaction failed or timed out).');
+        }
         try {
           this.abort();
         } catch {}

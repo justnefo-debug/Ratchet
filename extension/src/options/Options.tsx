@@ -180,6 +180,84 @@ const Options: React.FC = () => {
           </div>
         </section>
 
+        {/* Review Before Sending */}
+        <section className="settings-section">
+          <h2>Review Before Sending</h2>
+          <p className="help-text">
+            Display a floating confirmation panel before outgoing prompts leave your browser, allowing you to inspect and selectively un-redact detected items.
+          </p>
+          <div className="setting-group" style={{ marginTop: '10px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: '8px' }}>
+              <input
+                id="global-review-toggle"
+                type="checkbox"
+                checked={settings.reviewBeforeSend !== false}
+                onChange={(e) => setSettings({ ...settings, reviewBeforeSend: e.target.checked })}
+              />
+              Enable Review-Before-Send (Default: On)
+            </label>
+          </div>
+          <div className="entity-grid" style={{ marginTop: '12px' }}>
+            <div className="entity-card">
+              <span className="entity-label">ChatGPT</span>
+              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                <input
+                  id="review-site-chatgpt"
+                  type="checkbox"
+                  checked={settings.reviewSites?.chatgpt !== false}
+                  onChange={(e) => {
+                    const prev = settings.reviewSites || { chatgpt: true, claude: true, gemini: true };
+                    setSettings({ ...settings, reviewSites: { ...prev, chatgpt: e.target.checked } });
+                  }}
+                />
+              </label>
+            </div>
+            <div className="entity-card">
+              <span className="entity-label">Claude</span>
+              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                <input
+                  id="review-site-claude"
+                  type="checkbox"
+                  checked={settings.reviewSites?.claude !== false}
+                  onChange={(e) => {
+                    const prev = settings.reviewSites || { chatgpt: true, claude: true, gemini: true };
+                    setSettings({ ...settings, reviewSites: { ...prev, claude: e.target.checked } });
+                  }}
+                />
+              </label>
+            </div>
+            <div className="entity-card">
+              <span className="entity-label">Gemini</span>
+              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                <input
+                  id="review-site-gemini"
+                  type="checkbox"
+                  checked={settings.reviewSites?.gemini !== false}
+                  onChange={(e) => {
+                    const prev = settings.reviewSites || { chatgpt: true, claude: true, gemini: true };
+                    setSettings({ ...settings, reviewSites: { ...prev, gemini: e.target.checked } });
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+          <div className="setting-group" style={{ marginTop: '14px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span className="setting-title" style={{ fontSize: '13px', color: '#cbd5e1' }}>Review Timeout (seconds):</span>
+              <input
+                id="review-timeout-input"
+                type="number"
+                min="5"
+                max="300"
+                value={settings.reviewTimeoutSeconds ?? 60}
+                onChange={(e) => setSettings({ ...settings, reviewTimeoutSeconds: parseInt(e.target.value, 10) || 60 })}
+                style={{ width: '80px', padding: '4px 8px', borderRadius: '4px', background: '#1e293b', border: '1px solid #475569', color: '#fff' }}
+              />
+            </label>
+            <p className="help-text" style={{ marginTop: '4px' }}>Outgoing requests fail closed if not confirmed before the timeout expires.</p>
+          </div>
+        </section>
+
         {/* Per-Entity Type Toggles */}
         <section className="settings-section">
           <h2>Protected Entity Types</h2>

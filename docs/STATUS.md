@@ -41,6 +41,7 @@
 | **Stage 3** | Interception, Restoration & Adapters | MAIN-world `fetch`/XHR interceptor with `postMessage` bridge. Site adapters for ChatGPT and Claude completion endpoints. Fail-closed error handling. ISOLATED-world streaming DOM restoration. Test harness with local mock chat server. Sanitized production manifest eliminating localhost permissions. | ✅ Complete |
 | **Stage 4** | Settings, Persistence & ReDoS Security | Options page with custom rules editor, entity category toggles, and sensitivity threshold controls. Client-side ReDoS validator with hard timeout. Optional AES-GCM encrypted persistence in `chrome.storage.local`. Popup UI with live session stats. | ✅ Complete |
 | **Stage 5** | Gazetteer & Context Rule NER | Offline, zero-network Radix-Trie gazetteer detector for names, organizations, and locations. Morphosyntactic context rules and negative filters (code identifiers, file paths). Held-out test evaluation harness and live E2E integration test. | ✅ Complete |
+| **Stage 6** | Review-Before-Send Panel | Closed Shadow DOM overlay (`mode: 'closed'`) in ISOLATED world displaying detected items with category and original -> placeholder. Per-site toggles, timeout countdown with fail-closed cancellation, individual item un-redact, send as-is warning modal, ephemeral session exemption list, keyboard shortcuts (Enter / Esc). 6 dedicated Playwright E2E tests passing (17 total). | ✅ Complete |
 
 ---
 
@@ -76,34 +77,45 @@
 4. **Memory Profiling Audit (Fix 4 - Completed):**
    - Disclosed that the 4.46 MB figure measured by CDP `Performance.getMetrics` originated from the active web page tab context (the renderer process hosting the chat DOM and injected content script), not the service worker.
    - Measured true V8 heap and process metrics:
-     - Web Page Tab JS Heap Used: ~1.4 - 1.7 MB (idle page) to 4.46 MB (during heavy conversation rendering)
+     - Web Page Tab JS Heap Used: ~1.4 - 1.7 MB (idle page) to 4.48 MB (during heavy conversation rendering)
      - Service Worker V8 JS Heap: ~1.5 - 2.5 MB post-NER load
      - Dedicated Extension Helper Process Working Set (OS private memory): ~35 - 50 MB
      - Combined Chrome browser memory with extension loaded: under established 50 MB extension constraint.
 
 ---
 
-## 4. Open Roadmap Items
+## 4. Stage 6: Review-Before-Send Architecture & Verification
 
-### 4.1 Next Milestone: Review-Before-Send Panel
-- **Per-Site Setting:** "Review before sending" toggle, default: enabled.
-- **MAIN-World Wrapper Hold:** Request held in flight until user confirmation or timeout expiration.
-- **Timeout Security:** Enforce strict fail-closed policy (cancel wire request, display warning notice, maintain chat input usability).
-- **Closed Shadow DOM Overlay:** Created by ISOLATED content script displaying detected items (`category`, `original -> placeholder`).
-- **Isolation Guarantee:** Original values must never reach logs, page DOM, or page-accessible `postMessage` channels.
-- **Actions:**
-  - Send redacted (default, Enter key)
-  - Cancel (Esc key)
-  - Un-redact individual item
-  - Send as-is with explicit confirmation modal
-  - Ephemeral "Don't redact this again" session list
-- **Playwright Test Suite:**
-  - Panel rendering correct items
-  - Single-item un-redact wire verification
-  - Cancel wire cancellation
-  - Timeout fail-closed cancellation
-  - Shadow DOM closed isolation unreachable from page JS
+### 4.1 Security & Isolation Architecture
+- **Closed Shadow DOM Overlay:** Created directly on `document.documentElement` by the `ISOLATED` world script using `host.attachShadow({ mode: 'closed' })`. Page scripts querying `host.shadowRoot` receive strictly `null`, and `host.innerText` / `host.innerHTML` are empty.
+- **Zero Raw PII Exposure:**
+  - Raw PII is never emitted to console logs.
+  - Raw PII is never emitted over `window.postMessage` between `RATCHET_MAIN` and `RATCHET_ISOLATED`. Only the final transformed text destined for the wire is returned.
+  - Page-level DOM nodes outside the closed shadow DOM never contain extension-injected PII.
+- **Fail-Closed Network Wrapper:** The MAIN-world interceptor wraps `fetch` and `XMLHttpRequest`, holding outgoing requests in flight until user decision. On cancel or timeout, the request is cleanly aborted and rejected with no bytes transmitted over the wire.
+- **Chat UI Preservation:** Canceling or timing out displays an alert notice and leaves the chat UI input box intact and interactive, allowing the user to edit or retry without page refresh.
 
-### 4.2 Pending Live Site Data
-- **Real-Site Verification (ChatGPT & Claude):** Awaiting live request traces from production sites to validate real request payload field paths before adjusting site adapters.
-- **Gemini Adapter:** Pending captured network payload structure from live Gemini interface.
+### 4.2 Actions & User Controls
+1. **Send Redacted (Default, `Enter` key):** Transmits redacted prompt with placeholders.
+2. **Cancel (`Esc` key or Cancel button):** Aborts request immediately, dispatches 0 requests over the wire, and displays warning notice.
+3. **Un-Redact Single Item:** Clicking "Un-redact" on any card restores that specific original value on the wire while leaving all other detected items redacted with placeholders.
+4. **Send As-Is:** Displays a confirmation warning modal (`⚠️ Send unredacted data over the wire?`). If confirmed (or confirmed via Enter), sends original prompt in plain text.
+5. **Session-Only Exemption List:** Checkbox on each item card ("Don't redact this again this session") adds the value to an in-memory `Set` on the content script. Exempted items are un-redacted on subsequent prompts in the session without triggering the review modal.
+6. **Configurable Timeouts:** Per-site toggles ("Review before sending", default on for ChatGPT, Claude, Gemini) and configurable review timeout seconds (default 60s) in Options and Popup UI.
+
+### 4.3 Automated E2E Test Suite (Playwright)
+All 17 E2E tests pass (`npm run test:e2e`):
+- **Test 13:** Review panel displays detected items with category, original, and placeholder; sends redacted on Enter.
+- **Test 14:** Un-redacting a single item transmits only that value over the wire while remaining items stay redacted; displays restored response in DOM.
+- **Test 15:** User cancel (Esc or button) sends nothing over the wire, shows warning notice, and leaves chat UI usable.
+- **Test 16:** Review timeout fails closed: blocks wire transmission, shows notice, and leaves chat UI usable.
+- **Test 17:** Closed Shadow DOM isolation guarantee: panel contents and raw values are completely unreachable from page JS (`shadowRoot === null`).
+- **Test 18:** Send as-is action displays warning confirmation modal and transmits plain text if confirmed.
+
+---
+
+## 5. Open Items (Awaiting User Go-Ahead & Inputs)
+
+### 5.1 Pending Live Site Data
+- **Real-Site Verification (ChatGPT & Claude):** Adapters' request field paths were written from baseline assumptions. Awaiting real-site network trace results to validate or adjust paths. Do not change adapters until then.
+- **Gemini Adapter:** To be built from captured real requests, not from memory.

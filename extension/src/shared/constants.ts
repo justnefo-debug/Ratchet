@@ -41,6 +41,14 @@ export const DEFAULT_SETTINGS: RatchetSettings = {
     claude: true,
     gemini: true,
   },
+  reviewBeforeSend: true,
+  reviewTimeoutSeconds: 60,
+  reviewSites: {
+    chatgpt: true,
+    claude: true,
+    gemini: true,
+    mock: false,
+  },
   enablePersistence: false,
   persistenceExpiryHours: 24,
   entityToggles: {

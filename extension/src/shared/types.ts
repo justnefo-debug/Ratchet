@@ -60,6 +60,15 @@ export interface RatchetSettings {
     chatgpt: boolean;
     claude: boolean;
     gemini: boolean;
+    mock?: boolean;
+  };
+  reviewBeforeSend?: boolean;
+  reviewTimeoutSeconds?: number;
+  reviewSites?: {
+    chatgpt: boolean;
+    claude: boolean;
+    gemini: boolean;
+    mock?: boolean;
   };
   enablePersistence: boolean;
   persistenceExpiryHours: number;
