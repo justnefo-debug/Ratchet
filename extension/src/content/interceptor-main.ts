@@ -128,7 +128,9 @@ import { showPrivacyNotice, showWarningNotice } from './ui-notice';
       redactedText = await requestRedaction(extracted.prompt, convId);
     } catch (err: any) {
       const msg = err?.message || '';
-      if (msg.includes('cancelled')) {
+      if (msg.includes('custom rule')) {
+        showPrivacyNotice(`Ratchet: Outgoing request blocked (skipped custom rule).`);
+      } else if (msg.includes('cancelled')) {
         showWarningNotice('Ratchet: Outgoing prompt cancelled by user.');
       } else if (msg.includes('timed out')) {
         showPrivacyNotice('Ratchet: Outgoing request blocked (review timed out).');
@@ -195,7 +197,9 @@ import { showPrivacyNotice, showWarningNotice } from './ui-notice';
       })
       .catch((err: any) => {
         const msg = err?.message || '';
-        if (msg.includes('cancelled')) {
+        if (msg.includes('custom rule')) {
+          showPrivacyNotice(`Ratchet: Outgoing request blocked (skipped custom rule).`);
+        } else if (msg.includes('cancelled')) {
           showWarningNotice('Ratchet: Outgoing prompt cancelled by user.');
         } else if (msg.includes('timed out')) {
           showPrivacyNotice('Ratchet: Outgoing request blocked (review timed out).');

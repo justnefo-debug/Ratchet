@@ -667,6 +667,19 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
     const t0 = Date.now();
     await page.locator('#send-textarea-btn').click();
 
+    // The skipped custom rule forces the review panel open with a visible warning naming the rule
+    await page.waitForSelector('#ratchet-review-host', { state: 'attached', timeout: 5000 });
+    const { shadowRoot } = await getCdpShadowRoot(page);
+    const warnNode = findNodeByPredicate(
+      shadowRoot,
+      (n) => getNodeAttr(n, 'id') === 'ratchet-skipped-rules-warning',
+    );
+    expect(warnNode, 'Review panel must display skipped rules warning').toBeTruthy();
+    expect(getNodeText(warnNode)).toContain('Injected Backtracking Rule');
+
+    // Confirm sending via Enter key
+    await page.keyboard.press('Enter');
+
     // Assert that redaction completes quickly and doesn't hang the worker
     await expect(page.locator('#status')).toHaveText('Completed', { timeout: 10000 });
     const elapsed = Date.now() - t0;
@@ -1092,6 +1105,68 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
       reviewTimeoutSeconds: 60,
     });
 
+    await client.detach();
+  });
+
+  // ─── Test 19: Fail-Closed on Skipped Custom Rules When Cancelled ─────────
+  test('19: Skipped custom rule forces review panel with warning, cancelling fails closed and blocks wire request', async () => {
+    // 1. Inject an unsafe rule and explicitly disable review for general mock site prompts
+    await updateSettings({
+      reviewBeforeSend: false,
+      reviewSites: { chatgpt: false, claude: false, mock: false },
+      customRules: [
+        {
+          id: 'unsafe-cancel-test',
+          name: 'Blocked Malformed Rule',
+          category: 'SECRET',
+          type: 'regex',
+          pattern: '(a+)+$',
+          enabled: true,
+          confidence: 0.9,
+        },
+      ],
+    });
+
+    const convId = 'conv-skipped-rule-cancel';
+    await page.goto(`http://127.0.0.1:${PORT}/?c=${convId}`);
+    await page.waitForLoadState('networkidle');
+    server.clearLoggedRequests();
+
+    const promptText = 'Confidential project details to be checked.';
+    await page.locator('#prompt-textarea').fill(promptText);
+    await page.locator('#send-textarea-btn').click();
+
+    // 2. Review panel MUST be forced open despite reviewBeforeSend: false
+    await page.waitForSelector('#ratchet-review-host', { state: 'attached', timeout: 5000 });
+    const { client, shadowRoot } = await getCdpShadowRoot(page);
+    const warnNode = findNodeByPredicate(
+      shadowRoot,
+      (n) => getNodeAttr(n, 'id') === 'ratchet-skipped-rules-warning',
+    );
+    expect(warnNode, 'Review panel must display skipped rules warning').toBeTruthy();
+    expect(getNodeText(warnNode)).toContain('Blocked Malformed Rule');
+
+    // 3. User cancels review via Escape key
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('#ratchet-review-host', { state: 'detached', timeout: 3000 });
+
+    // 4. Assert fail-closed: 0 requests reach the wire
+    expect(server.loggedRequests.length).toBe(0);
+
+    // 5. Privacy notice is displayed and chat UI remains usable
+    const notice = page.locator('#ratchet-privacy-notice');
+    await expect(notice).toBeVisible({ timeout: 5000 });
+    expect(await notice.innerText()).toContain('skipped custom rule');
+
+    await page.locator('#prompt-textarea').fill('Safe prompt without skipped rules');
+    expect(await page.locator('#prompt-textarea').inputValue()).toBe('Safe prompt without skipped rules');
+
+    // Clean up
+    await updateSettings({
+      reviewBeforeSend: true,
+      reviewSites: { chatgpt: true, claude: true, mock: false },
+      customRules: [],
+    });
     await client.detach();
   });
 });

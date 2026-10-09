@@ -260,5 +260,32 @@ describe('Service Worker & Session Storage Mapping Pipeline', () => {
     expect(sessionStorageMap.has('other_key')).toBe(true);
     expect(localStorageMap.has('enc:conv:c1')).toBe(false);
   });
+
+  it('reports skippedRules when user custom rules violate ReDoS-safe subset during handleRedact', async () => {
+    localStorageMap.set('ratchet_settings', {
+      customRules: [
+        {
+          id: 'unsafe-rule-sw-test',
+          name: 'Dangerous Backtracking Rule',
+          category: 'CONFIDENTIAL',
+          type: 'regex',
+          pattern: 'x*x*x*x*y',
+          enabled: true,
+          confidence: 0.9,
+        },
+      ],
+    });
+
+    const res = await handleRedact({
+      text: 'Confidential system message.',
+      conversationId: 'c-test-skipped-rules',
+      siteOrigin: 'https://chatgpt.com',
+    });
+
+    expect(res.skippedRules).toBeDefined();
+    expect(res.skippedRules).toContain('Dangerous Backtracking Rule');
+    expect(res.warnings.length).toBeGreaterThan(0);
+    expect(res.warnings[0]).toContain('Dangerous Backtracking Rule');
+  });
 });
 

@@ -23,6 +23,8 @@ export interface ReviewPanelOptions {
   originalText: string;
   redactedText: string;
   timeoutSeconds?: number;
+  skippedRules?: string[];
+  warnings?: string[];
   onSend: (finalWireText: string) => void;
   onCancel: (reason: string) => void;
   onSessionExempt?: (originalValue: string) => void;
@@ -356,6 +358,32 @@ export function showReviewPanel(options: ReviewPanelOptions): { close: () => voi
       background: #334155;
       color: #e2e8f0;
     }
+    .skipped-rules-banner {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid #ef4444;
+      border-radius: 8px;
+      padding: 12px 14px;
+      color: #fca5a5;
+      font-size: 13px;
+      line-height: 1.4;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .skipped-rules-banner .banner-title {
+      font-weight: 700;
+      color: #f87171;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+    }
+    .skipped-rules-banner .rules-list {
+      margin-left: 20px;
+      margin-top: 4px;
+      color: #fecaca;
+      font-size: 12px;
+    }
   `;
   shadow.appendChild(style);
 
@@ -373,13 +401,18 @@ export function showReviewPanel(options: ReviewPanelOptions): { close: () => voi
   const header = document.createElement('div');
   header.className = 'header';
 
+  const hasSkipped = options.skippedRules && options.skippedRules.length > 0;
+  const subtitleText = hasSkipped
+    ? '⚠️ Warning: One or more custom rules were skipped. Review prompt before sending.'
+    : 'Ratchet detected sensitive data. Choose what gets redacted before sending.';
+
   const titleArea = document.createElement('div');
   titleArea.className = 'title-area';
   titleArea.innerHTML = `
     <span class="shield-badge">🛡️</span>
     <div>
       <div id="ratchet-panel-title" class="title">Review Outgoing Prompt</div>
-      <div class="subtitle">Ratchet detected sensitive data. Choose what gets redacted before sending.</div>
+      <div class="subtitle">${subtitleText}</div>
     </div>
   `;
 
@@ -396,12 +429,35 @@ export function showReviewPanel(options: ReviewPanelOptions): { close: () => voi
   const content = document.createElement('div');
   content.className = 'content';
 
+  if (hasSkipped) {
+    const skippedBanner = document.createElement('div');
+    skippedBanner.className = 'skipped-rules-banner';
+    skippedBanner.id = 'ratchet-skipped-rules-warning';
+    skippedBanner.innerHTML = `
+      <div class="banner-title">
+        <span>⚠️</span>
+        <span>Custom Rule Skipped — Prompt Not Fully Protected</span>
+      </div>
+      <div>
+        The following custom rule(s) were skipped (unsafe syntax or execution time budget exceeded):
+        <ul class="rules-list">
+          ${options.skippedRules!.map((r) => `<li><strong>${escapeHtml(r)}</strong></li>`).join('')}
+        </ul>
+        <div style="font-size: 11px; color: #fca5a5; margin-top: 4px;">
+          Unchecked data matching these rules may remain in your prompt. Review before sending or cancel.
+        </div>
+      </div>
+    `;
+    content.appendChild(skippedBanner);
+  }
+
   const countBanner = document.createElement('div');
   countBanner.className = 'items-count-banner';
-  countBanner.innerHTML = `
-    <span><strong>${options.items.length}</strong> items detected</span>
-    <span style="font-size: 12px; color: #94a3b8;">Original values stay local</span>
-  `;
+  countBanner.innerHTML = options.items.length > 0
+    ? `<span><strong>${options.items.length}</strong> items detected</span>
+       <span style="font-size: 12px; color: #94a3b8;">Original values stay local</span>`
+    : `<span><strong>0</strong> standard items detected</span>
+       <span style="font-size: 12px; color: #f87171;">Custom rule skipped</span>`;
   content.appendChild(countBanner);
 
   // Items List

@@ -191,6 +191,23 @@ describe('Custom Rules Runtime Time Guard', () => {
     expect(result.valid).toBe(false);
     expect(result.error).toContain('exceeds 200 character limit');
   });
+
+  it('records skippedRules and descriptive warning when a custom rule violates the safe subset', () => {
+    const unsafeRule: CustomRule = {
+      id: 'unsafe-test-rule',
+      name: 'Unsafe Backtracker',
+      category: 'SECRET',
+      type: 'regex',
+      pattern: 'x*x*x*x*y',
+      enabled: true,
+      confidence: 0.9,
+    };
+    const res = detectWithCustomRules('Hello world', [unsafeRule], 25);
+    expect(res.skippedRules).toContain('Unsafe Backtracker');
+    expect(res.warnings.length).toBeGreaterThan(0);
+    expect(res.warnings[0]).toContain('Unsafe Backtracker');
+    expect(res.warnings[0]).toContain('violates ReDoS-safe subset');
+  });
 });
 
 

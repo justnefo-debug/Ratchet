@@ -100,8 +100,10 @@ export function detectWithCustomRules(
             break;
           }
         }
-      } catch {
-        console.warn(`[Ratchet] Invalid custom rule regex: ${rule.pattern}`);
+      } catch (err: any) {
+        skippedRules.push(rule.name);
+        warnings.push(`Custom rule "${rule.name}" evaluation error: ${err?.message || 'invalid regex'}`);
+        continue;
       }
     }
 

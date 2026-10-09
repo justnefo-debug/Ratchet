@@ -95,6 +95,8 @@ export class ContentInterceptor {
                 // Prepare review items from mappings
                 const rawMappings: Array<{ placeholder: string; original: string; type: string }> =
                   response.data.mappings || [];
+                const skippedRules: string[] = response.data?.skippedRules || [];
+                const hasSkippedRules = skippedRules.length > 0;
 
                 // Filter out any items in the session-only exemption list
                 const reviewItems: ReviewItem[] = [];
@@ -113,12 +115,14 @@ export class ContentInterceptor {
                   }
                 }
 
-                // If Review is enabled and there are sensitive items detected:
-                if (reviewEnabled && reviewItems.length > 0) {
+                // If Review is enabled and sensitive items are detected, OR if any custom rules were skipped:
+                if ((reviewEnabled && reviewItems.length > 0) || hasSkippedRules) {
                   showReviewPanel({
                     items: reviewItems,
                     originalText: text,
                     redactedText: currentRedactedText,
+                    skippedRules,
+                    warnings: response.data?.warnings || [],
                     timeoutSeconds: settings?.reviewTimeoutSeconds ?? 60,
                     onSend: (finalWireText: string) => {
                       window.dispatchEvent(new CustomEvent('ratchet:mapping-updated'));
@@ -142,6 +146,8 @@ export class ContentInterceptor {
                           error:
                             reason === 'timeout'
                               ? 'Review timed out (fail-closed)'
+                              : hasSkippedRules
+                              ? `Prompt blocked: custom rule(s) "${skippedRules.join(', ')}" were skipped`
                               : 'Prompt cancelled by user',
                         },
                         '*',

@@ -27,8 +27,13 @@
 
 ### 1.4 Fail-Closed Security Policy
 - **Strict Invariant:** If any redaction failure occurs—including service worker unreachability, detection error, custom regex timeout, or validation failure—the network request is immediately aborted and cancelled.
+- **Skipped Custom Rules Policy:** If a user-defined custom rule is skipped at runtime (due to ReDoS-unsafe pattern syntax, regex evaluation failure, or exceeding the 25ms per-rule execution budget), the prompt **must never dispatch silently**. Ratchet enforces fail-closed containment:
+  - The Review-Before-Send panel is **automatically forced open** (even if review toggles are disabled or 0 standard entities were detected).
+  - The panel displays a prominent alert banner naming each skipped rule and warning that unredacted matches may remain in the prompt.
+  - If the user cancels the review panel (via Cancel button or `Esc` key) or if the review timer expires, the outgoing request is completely blocked on the wire (0 requests dispatched) and a privacy notice naming the skipped rule is shown.
+  - The request is only transmitted if the user explicitly reviews the prompt and confirms sending.
 - **User Feedback & Usability:** A clear, non-intrusive warning notice is displayed to the user explaining that the request was stopped to prevent data leakage. The chat input is preserved intact so the user does not lose typed work and the chat interface remains usable.
-- **Zero Leakage Tolerance:** Prompts are never allowed to fall through to the network in an unredacted state upon system errors.
+- **Zero Leakage Tolerance:** Prompts are never allowed to fall through to the network in an unredacted state upon system errors or skipped rule conditions.
 
 ### 1.5 Threat Model & Security Boundaries
 - **Network Interception Boundary:** Interception occurs in a `MAIN` world script wrapping `window.fetch` and `XMLHttpRequest`. Prompts are sanitized at the network edge before leaving the browser. External network observers, AI backend APIs, and proxy servers only ever see placeholder tokens (e.g. `«PERSON_1»`).
