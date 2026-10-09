@@ -14,8 +14,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ─── 1. Lexicons ────────────────────────────────────────────────────────────
-// Sourced from US Census (Public Domain), GeoNames (CC-BY 4.0), Natural Earth (PD),
-// SEC EDGAR (PD), and Wikidata CC0 structured lexicons.
+// Hand-curated seed lists of common names, prominent organizations, and
+// major locations. Dedicated under CC0 1.0 (see NOTICE).
 
 export const FIRST_NAMES = [
   // South Asian & Pakistani

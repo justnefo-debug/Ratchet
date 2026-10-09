@@ -1,30 +1,31 @@
-# NOTICE - Third-Party Data & Lexicon Attributions
+# NOTICE — Lexicon Data Provenance & Attributions
 
-Ratchet bundles pre-compiled name, organization, and location lexicons for offline, zero-network privacy detection. The underlying source data is derived from openly licensed and public domain datasets described below.
+Ratchet bundles an offline, zero-network pre-indexed Radix-Trie lexicon for named entity detection (`src/detectors/gazetteer-data.json`, 22.5 KB).
 
 ---
 
-### 1. United States Census Bureau Surnames & Given Names
-- **Source**: U.S. Census Bureau, Population Division (https://www.census.gov/topics/population/genealogy/data.html)
-- **License**: U.S. Government Work / Public Domain (17 U.S.C. § 105)
-- **Attribution**: U.S. Census Bureau Demographic Surveys and Decennial Census data (Public Domain, free for redistribution and commercial use).
+## 1. Data Provenance & Category Counts
 
-### 2. GeoNames Geographical Database
-- **Source**: GeoNames (https://www.geonames.org/)
-- **License**: Creative Commons Attribution 4.0 International (CC BY 4.0)
-- **Attribution**: "This product includes data from GeoNames (https://www.geonames.org/), made available under the Creative Commons Attribution 4.0 License."
+The bundled gazetteer contains a total of **524 hand-curated seed entries** across four categories:
 
-### 3. Natural Earth Vector Data
-- **Source**: Natural Earth (https://www.naturalearthdata.com/)
-- **License**: Public Domain
-- **Attribution**: Data created by Nathaniel Vaughn Kelso, Tom Patterson, and Natural Earth contributors (Public Domain).
+| Category | Entry Count | Provenance & Selection Method |
+| :--- | :---: | :--- |
+| **First Names** (`FIRST_NAME`) | **159** | Hand-curated list of common given names across South Asian, Middle Eastern, East Asian, African, and Western demographics. |
+| **Last Names** (`LAST_NAME`) | **149** | Hand-curated list of common surnames across South Asian, Middle Eastern, East Asian, African, and Western demographics. |
+| **Organizations** (`ORG`) | **99** | Hand-curated list of prominent technology firms, financial institutions, consulting firms, research universities, and multilateral agencies. |
+| **Locations** (`LOCATION`) | **117** | Hand-curated list of major sovereign nations and global metropolitan tech/commercial hubs. |
 
-### 4. SEC EDGAR Company Database
-- **Source**: U.S. Securities and Exchange Commission EDGAR Database (https://www.sec.gov/edgar)
-- **License**: U.S. Government Work / Public Domain
-- **Attribution**: SEC Company Filings and Public Corporate Registries (Public Domain).
+**Clarification on External Corpora:**
+Earlier project documentation referenced bulk external datasets (US Census Bureau, GeoNames, Natural Earth, SEC EDGAR, and Wikidata). No automated bulk ingestion or dataset downloads were performed for this bundle. All entries were assembled directly by hand in `scripts/build-trie.mjs` to keep the extension footprint small (~22.5 KB JSON, ~4.5 MB in-memory heap) and preserve zero-network operation.
 
-### 5. Wikidata & Open Lexical Gazetteers
-- **Source**: Wikidata Query Service / Wikimedia Foundation (https://www.wikidata.org/)
-- **License**: Creative Commons CC0 1.0 Universal Public Domain Dedication (CC0 1.0)
-- **Attribution**: Global given names, surnames, and institutions structured data released under CC0 1.0 Universal Public Domain Dedication.
+---
+
+## 2. Licensing
+
+The hand-curated lists consist of factual entity names and common vocabulary terms. The compiled lists and trie generation code are dedicated to the public domain under **CC0 1.0 Universal (Public Domain Dedication)**, with no third-party copyright restrictions.
+
+```
+Creative Commons Legal Code
+CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
+https://creativecommons.org/publicdomain/zero/1.0/
+```

@@ -7,7 +7,7 @@
  * - LOCATION («LOCATION_1»)
  *
  * Architecture:
- * - Lazy-loaded Radix-Trie compiled at build-time from openly licensed lexicons (NOTICE).
+ * - Lazy-loaded Radix-Trie compiled at build-time from hand-curated seed lexicons (NOTICE).
  * - Morphosyntactic & relational context cues for high precision.
  * - Negative filters: code identifiers, file paths, sentence-initial stopwords.
  * - Sensitivity mapping: low, medium, high.
