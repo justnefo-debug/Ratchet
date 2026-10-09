@@ -37,7 +37,7 @@ describe('ReDoS Safety Check', () => {
   }
 });
 
-import { validateRegexSafety } from '../src/detectors/redos-validator';
+import { validateRegexSafety, validateRegexSafetyAsync } from '../src/detectors/redos-validator';
 
 describe('Custom Rule ReDoS Validator (validateRegexSafety)', () => {
   it('accepts safe, well-formed regular expressions', () => {
@@ -91,5 +91,79 @@ describe('Custom Rule ReDoS Validator (validateRegexSafety)', () => {
       expect(res.error).toMatch(/ReDoS|nested repetition/i);
     }
   });
+
+  it('asynchronously validates regex patterns without blocking', async () => {
+    const safeRes = await validateRegexSafetyAsync('CONFIDENTIAL-[0-9]+', 300);
+    expect(safeRes.valid).toBe(true);
+
+    const dangerRes = await validateRegexSafetyAsync('(a+)+$', 300);
+    expect(dangerRes.valid).toBe(false);
+    expect(dangerRes.error).toMatch(/ReDoS|nested repetition|timeout/i);
+  });
 });
+
+import { detectWithCustomRules } from '../src/detectors/custom-rules';
+import type { CustomRule } from '../src/shared/types';
+
+describe('Custom Rules Runtime Time Guard', () => {
+  it('skips rules that exceed execution budget and generates user warnings', () => {
+    const rules: CustomRule[] = [
+      {
+        id: 'r1',
+        name: 'Fast Normal Rule',
+        category: 'FAST',
+        type: 'keyword',
+        values: ['QuickSecret'],
+        enabled: true,
+        confidence: 0.95,
+        pattern: '',
+      },
+      {
+        id: 'r2',
+        name: 'Slow Heavy Rule',
+        category: 'SLOW',
+        type: 'keyword',
+        // Provide thousands of keywords to exceed a 0.01ms budget
+        values: Array.from({ length: 5000 }, (_, i) => `kw_${i}_test`),
+        enabled: true,
+        confidence: 0.95,
+        pattern: '',
+      },
+    ];
+
+    const testText = 'Here is QuickSecret and some other text.';
+
+    // Run with 0.01ms ultra-low budget to test budget cutoff enforcement
+    const result = detectWithCustomRules(testText, rules, 0.01);
+
+    // Fast rule executed before or after
+    // Slow rule MUST be recorded in skippedRules and warnings
+    expect(result.skippedRules).toContain('Slow Heavy Rule');
+    expect(result.warnings.some((w) => w.includes('Slow Heavy Rule'))).toBe(true);
+    expect(result.warnings.some((w) => w.includes('exceeded'))).toBe(true);
+  });
+
+  it('runs normal rules within budget without skipping', () => {
+    const rules: CustomRule[] = [
+      {
+        id: 'r1',
+        name: 'Alpha Project',
+        category: 'PROJECT',
+        type: 'regex',
+        pattern: 'PROJ-[0-9]{4}',
+        enabled: true,
+        confidence: 0.95,
+      },
+    ];
+
+    const testText = 'Working on PROJ-1234 today.';
+    const result = detectWithCustomRules(testText, rules, 25);
+
+    expect(result.skippedRules.length).toBe(0);
+    expect(result.warnings.length).toBe(0);
+    expect(result.entities.length).toBe(1);
+    expect(result.entities[0].value).toBe('PROJ-1234');
+  });
+});
+
 

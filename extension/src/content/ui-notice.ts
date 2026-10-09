@@ -55,3 +55,59 @@ export function showPrivacyNotice(message: string, durationMs: number = 6000): v
     // Failsafe
   }
 }
+
+/**
+ * Displays an informational / warning banner (e.g. slow custom rule skipped).
+ */
+export function showWarningNotice(message: string, durationMs: number = 6000): void {
+  try {
+    const existing = document.getElementById('ratchet-warning-notice');
+    if (existing) existing.remove();
+
+    const notice = document.createElement('div');
+    notice.id = 'ratchet-warning-notice';
+    notice.setAttribute('role', 'alert');
+    Object.assign(notice.style, {
+      position: 'fixed',
+      top: '70px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      backgroundColor: '#d97706',
+      color: '#ffffff',
+      padding: '10px 18px',
+      borderRadius: '8px',
+      fontSize: '13px',
+      fontWeight: '600',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)',
+      zIndex: '2147483647',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      pointerEvents: 'auto',
+      transition: 'opacity 0.3s ease',
+    });
+
+    const iconSpan = document.createElement('span');
+    iconSpan.textContent = '⚠️';
+    iconSpan.style.fontSize = '16px';
+
+    const textSpan = document.createElement('span');
+    textSpan.textContent = message;
+
+    notice.appendChild(iconSpan);
+    notice.appendChild(textSpan);
+
+    const target = document.body || document.documentElement;
+    if (target) {
+      target.appendChild(notice);
+      setTimeout(() => {
+        notice.style.opacity = '0';
+        setTimeout(() => notice.remove(), 300);
+      }, durationMs);
+    }
+  } catch {
+    // Failsafe
+  }
+}
+

@@ -10,7 +10,7 @@
  */
 
 import { getAdapterForUrl } from '../adapters';
-import { showPrivacyNotice } from './ui-notice';
+import { showPrivacyNotice, showWarningNotice } from './ui-notice';
 
 (() => {
   const adapter = getAdapterForUrl(window.location.href);
@@ -45,6 +45,11 @@ import { showPrivacyNotice } from './ui-notice';
           window.removeEventListener('message', handler);
 
           if (evt.data.success && typeof evt.data.redactedText === 'string') {
+            if (Array.isArray(evt.data.warnings)) {
+              for (const warn of evt.data.warnings) {
+                showWarningNotice(warn);
+              }
+            }
             resolve(evt.data.redactedText);
           } else {
             reject(new Error(evt.data.error || 'Redaction failed'));

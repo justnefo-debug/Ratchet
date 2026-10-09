@@ -68,3 +68,66 @@ export function validateRegexSafety(pattern: string): ReDoSValidationResult {
 
   return { valid: true, executionTimeMs: maxElapsed };
 }
+
+/**
+ * Asynchronously validates a regex pattern in a separate Web Worker thread
+ * with a hard timeout, guaranteeing the main UI thread never hangs.
+ */
+export function validateRegexSafetyAsync(
+  pattern: string,
+  timeoutMs: number = 300,
+): Promise<ReDoSValidationResult> {
+  // 1. Immediate static syntax & nested repetition check
+  const fastCheck = validateRegexSafety(pattern);
+  if (!fastCheck.valid) {
+    return Promise.resolve(fastCheck);
+  }
+
+  // 2. If running in environment without Worker support (e.g. Node/Vitest), return result
+  if (typeof Worker === 'undefined') {
+    return Promise.resolve(fastCheck);
+  }
+
+  // 3. Delegate to Worker with hard timeout
+  return new Promise((resolve) => {
+    let worker: Worker;
+    let timer: ReturnType<typeof setTimeout>;
+
+    try {
+      const workerUrl =
+        typeof chrome !== 'undefined' && chrome?.runtime?.getURL
+          ? chrome.runtime.getURL('assets/redosWorker.js')
+          : new URL('./redos-worker.ts', import.meta.url);
+
+      worker = new Worker(workerUrl, { type: 'module' });
+    } catch {
+      return resolve(fastCheck);
+    }
+
+    timer = setTimeout(() => {
+      worker.terminate();
+      resolve({
+        valid: false,
+        error: `Pattern rejected: execution exceeded ${timeoutMs}ms safety timeout (catastrophic backtracking / ReDoS)`,
+      });
+    }, timeoutMs);
+
+    worker.onmessage = (e: MessageEvent) => {
+      clearTimeout(timer);
+      worker.terminate();
+      resolve(e.data);
+    };
+
+    worker.onerror = () => {
+      clearTimeout(timer);
+      worker.terminate();
+      resolve({
+        valid: false,
+        error: 'Regex execution error in validation worker (ReDoS risk)',
+      });
+    };
+
+    worker.postMessage({ pattern });
+  });
+}
+

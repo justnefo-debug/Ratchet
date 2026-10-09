@@ -122,6 +122,8 @@ export async function handleRedact(request: {
       entities: [],
       entityCounts: {},
       conversationId,
+      skippedRules: [],
+      warnings: [],
     };
   }
 
@@ -131,7 +133,8 @@ export async function handleRedact(request: {
 
   // 2. Run detection pipeline
   const regexEntities = detectWithRegex(text);
-  const customEntities = detectWithCustomRules(text, settings.customRules || []);
+  const customResult = detectWithCustomRules(text, settings.customRules || []);
+  const customEntities = customResult.entities;
   const nerEntities = await detectWithNer(text);
 
   const allEntities: DetectedEntity[] = [
@@ -209,6 +212,8 @@ export async function handleRedact(request: {
     entities: cleanEntities,
     entityCounts,
     conversationId,
+    skippedRules: customResult.skippedRules,
+    warnings: customResult.warnings,
   };
 }
 

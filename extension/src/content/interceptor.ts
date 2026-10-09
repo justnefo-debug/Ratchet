@@ -62,6 +62,7 @@ export class ContentInterceptor {
                     requestId,
                     success: true,
                     redactedText: response.data.redactedText,
+                    warnings: response.data.warnings || [],
                   },
                   '*',
                 );

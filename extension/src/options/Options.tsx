@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './options.css';
 import { DEFAULT_SETTINGS, STORAGE_KEY_SETTINGS } from '../shared/constants';
-import { validateRegexSafety } from '../detectors/redos-validator';
+import { validateRegexSafetyAsync } from '../detectors/redos-validator';
 import type { RatchetSettings, CustomRule, Sensitivity } from '../shared/types';
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
@@ -41,7 +41,7 @@ const Options: React.FC = () => {
     }
   }, []);
 
-  // Validate regex patterns in real time
+  // Validate regex patterns in real time using Worker with hard timeout
   useEffect(() => {
     if (!newRulePattern.trim()) {
       setRuleValidationError(null);
@@ -49,12 +49,18 @@ const Options: React.FC = () => {
     }
 
     if (newRuleType === 'regex') {
-      const validation = validateRegexSafety(newRulePattern.trim());
-      if (!validation.valid) {
-        setRuleValidationError(validation.error || 'Invalid regex pattern');
-      } else {
-        setRuleValidationError(null);
-      }
+      let isMounted = true;
+      validateRegexSafetyAsync(newRulePattern.trim(), 300).then((validation) => {
+        if (!isMounted) return;
+        if (!validation.valid) {
+          setRuleValidationError(validation.error || 'Invalid regex pattern');
+        } else {
+          setRuleValidationError(null);
+        }
+      });
+      return () => {
+        isMounted = false;
+      };
     } else {
       setRuleValidationError(null);
     }
@@ -74,13 +80,13 @@ const Options: React.FC = () => {
     setSettings({ ...settings, entityToggles: updatedToggles });
   };
 
-  const handleAddRule = () => {
+  const handleAddRule = async () => {
     if (!newRuleName.trim() || !newRuleCategory.trim() || !newRulePattern.trim()) {
       return;
     }
 
     if (newRuleType === 'regex') {
-      const validation = validateRegexSafety(newRulePattern.trim());
+      const validation = await validateRegexSafetyAsync(newRulePattern.trim(), 300);
       if (!validation.valid) {
         setRuleValidationError(validation.error || 'Pattern failed ReDoS validation');
         return;
