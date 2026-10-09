@@ -238,8 +238,8 @@ const Popup = () => {
         >
           Options & Custom Rules
         </button>
-        <div style={{ marginTop: '8px', fontSize: '10px', color: '#64748b', textAlign: 'center', fontStyle: 'italic' }}>
-          * Name, organization, and location detection is best-effort.
+        <div id="popup-accuracy-disclaimer" style={{ marginTop: '8px', fontSize: '10px', color: '#94a3b8', textAlign: 'center', lineHeight: '1.35' }}>
+          * Names, orgs &amp; places are matched from built-in list (~13k entries) + your Sensitive Terms. Unlisted names are not automatically detected.
         </div>
       </div>
     </div>

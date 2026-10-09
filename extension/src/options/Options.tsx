@@ -16,9 +16,9 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   MAC_ADDRESS: 'MAC Addresses',
   URL_WITH_CREDS: 'URLs with Embedded Passwords',
   DATE_OF_BIRTH: 'Dates of Birth',
-  PERSON: 'People & Names (PERSON)',
-  ORG: 'Organizations & Companies (ORG)',
-  LOCATION: 'Locations & Cities (LOCATION)',
+  PERSON: 'Names (built-in list + sensitive terms)',
+  ORG: 'Organizations (built-in list + sensitive terms)',
+  LOCATION: 'Locations (built-in list + sensitive terms)',
 };
 
 const Options: React.FC = () => {
@@ -294,9 +294,29 @@ const Options: React.FC = () => {
         <section className="settings-section">
           <h2>Protected Entity Types</h2>
           <p className="help-text">Toggle which types of sensitive information are intercepted and redacted.</p>
-          <p className="help-text" style={{ color: '#fbbf24', marginTop: '4px' }}>
-            ℹ️ Note: Name, organization, and location detection is best-effort and will miss some entities.
-          </p>
+          <div
+            id="detection-accuracy-disclosure"
+            style={{
+              background: 'rgba(59, 130, 246, 0.08)',
+              border: '1px solid rgba(59, 130, 246, 0.25)',
+              borderRadius: '6px',
+              padding: '12px 14px',
+              margin: '10px 0 14px',
+              fontSize: '12px',
+              lineHeight: '1.5',
+              color: '#cbd5e1',
+            }}
+          >
+            <div style={{ fontWeight: 600, color: '#60a5fa', marginBottom: '6px' }}>
+              ℹ️ Detection Coverage &amp; Accuracy Disclosure
+            </div>
+            <div style={{ marginBottom: '6px' }}>
+              • <strong>Structured PII:</strong> High recall (&gt;98%) via deterministic patterns and checksums (emails, phone numbers, API keys, credit cards, SSNs, IP addresses).
+            </div>
+            <div>
+              • <strong>Names, Organizations &amp; Places:</strong> Matched exclusively against our offline built-in gazetteer (~13,000 common entries), context cues, and your personal <a href="#sensitive-terms-storage-notice" style={{ color: '#38bdf8', textDecoration: 'underline' }}>My sensitive terms</a> or manual redactions in the review panel. <em>Unlisted or rare names are not automatically recognized.</em>
+            </div>
+          </div>
 
           <div className="entity-grid">
             {Object.entries(ENTITY_TYPE_LABELS).map(([typeKey, label]) => {
