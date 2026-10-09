@@ -54,18 +54,31 @@ export function validateRegexSafety(pattern: string): ReDoSValidationResult {
     };
   }
 
-  // 3. Dynamic timing check against adversarial strings
+  // 2d. Static check for adjacent overlapping quantifiers on identical tokens e.g. x*x*, a+a+a+, .*.*
+  const adjacentQuantifier = /(?:([a-zA-Z0-9_\-\.\*]|\\w|\\d|\\s)[+*]\1[+*])|(?:(?:[a-zA-Z0-9_\-]|\\w|\\d)[+*]){3,}/;
+  if (adjacentQuantifier.test(pattern)) {
+    return {
+      valid: false,
+      error: 'Pattern rejected: adjacent overlapping quantifiers detected (ReDoS risk)',
+    };
+  }
+
+  // 3. Dynamic timing check against adversarial strings (including scaled lengths to catch polynomial backtracking)
   const chars = Array.from(new Set(pattern.replace(/[^a-zA-Z0-9]/g, ''))).slice(0, 3);
   const targetChar = chars[0] || 'a';
 
   const testInputs = [
     targetChar.repeat(25) + '!',
     targetChar.repeat(35) + '!',
+    targetChar.repeat(100) + '!',
+    targetChar.repeat(200) + '!',
     'a'.repeat(25) + '!',
     'a'.repeat(35) + '!',
-    '0123456789'.repeat(3) + '!',
-    'a b c d e '.repeat(3) + '!',
-    '--..__@@'.repeat(4) + '!',
+    'a'.repeat(100) + '!',
+    'a'.repeat(200) + '!',
+    '0123456789'.repeat(10) + '!',
+    'a b c d e '.repeat(10) + '!',
+    '--..__@@'.repeat(10) + '!',
   ];
 
   let maxElapsed = 0;

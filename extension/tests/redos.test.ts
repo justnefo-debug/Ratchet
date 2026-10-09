@@ -83,12 +83,14 @@ describe('Custom Rule ReDoS Validator (validateRegexSafety)', () => {
       '([a-zA-Z]+)*$',
       '(x+)+y',
       '([0-9]*)*',
+      'x*x*x*x*y',
+      'a+a+a+b',
     ];
 
     for (const pat of dangerousPatterns) {
       const res = validateRegexSafety(pat);
       expect(res.valid, `Expected ReDoS rejection for "${pat}"`).toBe(false);
-      expect(res.error).toMatch(/ReDoS|nested repetition/i);
+      expect(res.error).toMatch(/ReDoS|nested repetition|adjacent overlapping/i);
     }
   });
 

@@ -617,6 +617,81 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
     // Strict memory constraint check: must be under 50 MB
     expect(jsHeapUsed / (1024 * 1024)).toBeLessThan(50);
   });
+
+  // ─── Test 12: Custom-Rule ReDoS Protection in Real Extension ─────────────
+  test('12: Custom-rule ReDoS protection in real extension: rejects slow patterns in UI and runtime guard prevents worker hang', async () => {
+    // 1. Verify Options Page UI rejects slow backtracking regexes
+    const optionsPage = await context.newPage();
+    await optionsPage.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+    await optionsPage.waitForLoadState('domcontentloaded');
+
+    await optionsPage.locator('#new-rule-name').fill('Backtracking Pattern');
+    await optionsPage.locator('#new-rule-category').fill('PROJECT');
+    await optionsPage.locator('#new-rule-pattern').fill('x*x*x*x*y');
+
+    const validationStatus = optionsPage.locator('#rule-validation-status');
+    await expect(validationStatus).toBeVisible();
+    await expect(validationStatus).toContainText('ReDoS risk');
+    await expect(optionsPage.locator('#add-rule-btn')).toBeDisabled();
+    await optionsPage.close();
+
+    // 2. Programmatically inject an unsafe custom rule into settings (simulating unvalidated/migrated storage)
+    // and verify that the real service worker skips it at runtime without hanging the prompt flow.
+    const managePage = await context.newPage();
+    await managePage.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+    await managePage.evaluate(async () => {
+      const data: any = await chrome.storage.local.get('ratchet_settings');
+      const settings = data.ratchet_settings || {};
+      settings.customRules = settings.customRules || [];
+      settings.customRules.push({
+        id: 'unsafe-rule-e2e',
+        name: 'Injected Backtracking Rule',
+        category: 'SECRET',
+        type: 'regex',
+        pattern: 'x*x*x*x*y',
+        enabled: true,
+        confidence: 0.9,
+      });
+      await chrome.storage.local.set({ ratchet_settings: settings });
+    });
+    await managePage.close();
+
+    // 3. Send a prompt with 250 repeating 'x's which would freeze an un-guarded engine
+    const convId = 'conv-redos-runtime-guard';
+    await page.goto(`http://127.0.0.1:${PORT}/?c=${convId}`);
+    await page.waitForLoadState('networkidle');
+    server.clearLoggedRequests();
+
+    const adversarialPrompt = 'Incident: ' + 'x'.repeat(250) + '! Contacted admin@internal.example.org';
+    await page.locator('#prompt-textarea').fill(adversarialPrompt);
+    const t0 = Date.now();
+    await page.locator('#send-textarea-btn').click();
+
+    // Assert that redaction completes quickly and doesn't hang the worker
+    await expect(page.locator('#status')).toHaveText('Completed', { timeout: 10000 });
+    const elapsed = Date.now() - t0;
+    expect(elapsed).toBeLessThan(8000);
+
+    // Verify email was redacted normally and request went through
+    expect(server.loggedRequests.length).toBe(1);
+    const wireBody = server.loggedRequests[0].body;
+    expect(wireBody).toContain('«EMAIL_1»');
+    expect(wireBody).not.toContain('admin@internal.example.org');
+
+    // Clean up injected rule
+    const cleanupPage = await context.newPage();
+    await cleanupPage.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+    await cleanupPage.evaluate(async () => {
+      const data: any = await chrome.storage.local.get('ratchet_settings');
+      if (data.ratchet_settings?.customRules) {
+        data.ratchet_settings.customRules = data.ratchet_settings.customRules.filter(
+          (r: any) => r.id !== 'unsafe-rule-e2e'
+        );
+        await chrome.storage.local.set({ ratchet_settings: data.ratchet_settings });
+      }
+    });
+    await cleanupPage.close();
+  });
 });
 
 

@@ -6,6 +6,7 @@
  */
 
 import type { CustomRule, DetectedEntity } from '../shared/types';
+import { validateRegexSafety } from './redos-validator';
 
 export const CUSTOM_RULE_BUDGET_MS = 25; // 25ms per-rule budget
 
@@ -63,6 +64,16 @@ export function detectWithCustomRules(
         }
       }
     } else if (rule.type === 'regex' && rule.pattern) {
+      // 1. Enforce ReDoS-safe regex subset check before compiling or executing
+      const safety = validateRegexSafety(rule.pattern);
+      if (!safety.valid) {
+        skippedRules.push(rule.name);
+        warnings.push(
+          `Custom rule "${rule.name}" rejected: pattern violates ReDoS-safe subset (${safety.error}) and was skipped.`,
+        );
+        continue;
+      }
+
       try {
         const re = new RegExp(rule.pattern, 'g');
         let match: RegExpExecArray | null;
