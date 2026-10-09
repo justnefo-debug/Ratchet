@@ -25,9 +25,10 @@ export interface ReviewPanelOptions {
   timeoutSeconds?: number;
   skippedRules?: string[];
   warnings?: string[];
-  onSend: (finalWireText: string) => void;
+  onSend: (finalWireText: string, manualMappings?: Array<{ placeholder: string; original: string; type: string }>) => void;
   onCancel: (reason: string) => void;
   onSessionExempt?: (originalValue: string) => void;
+  onAddSensitiveTerm?: (term: string, category: string) => void;
 }
 
 let activePanelCleanup: (() => void) | null = null;
@@ -384,6 +385,95 @@ export function showReviewPanel(options: ReviewPanelOptions): { close: () => voi
       color: #fecaca;
       font-size: 12px;
     }
+    .preview-section {
+      background: #090d16;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .preview-box {
+      font-size: 13px;
+      line-height: 1.5;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      color: #e2e8f0;
+      user-select: text;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 120px;
+      overflow-y: auto;
+      padding: 8px 10px;
+      background: rgba(30, 41, 59, 0.4);
+      border-radius: 6px;
+      border: 1px solid rgba(51, 65, 85, 0.4);
+    }
+    .preview-box::selection {
+      background: #4f46e5;
+      color: #ffffff;
+    }
+    .manual-toolbar {
+      display: none;
+      background: #1e293b;
+      border: 1px solid #475569;
+      border-radius: 6px;
+      padding: 8px 10px;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      flex-wrap: wrap;
+    }
+    .manual-toolbar.active {
+      display: flex;
+    }
+    .manual-selected-text {
+      color: #38bdf8;
+      font-weight: 600;
+      max-width: 130px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .manual-cat-select {
+      background: #0f172a;
+      border: 1px solid #475569;
+      color: #f8fafc;
+      font-size: 11px;
+      padding: 3px 6px;
+      border-radius: 4px;
+    }
+    .manual-btn-redact {
+      background: #6366f1;
+      border: none;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .manual-btn-redact:hover {
+      background: #4f46e5;
+    }
+    .manual-add-terms-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: #cbd5e1;
+      cursor: pointer;
+    }
   `;
   shadow.appendChild(style);
 
@@ -460,11 +550,57 @@ export function showReviewPanel(options: ReviewPanelOptions): { close: () => voi
        <span style="font-size: 12px; color: #f87171;">Custom rule skipped</span>`;
   content.appendChild(countBanner);
 
+  let currentRedactedText = options.redactedText;
+  const manualMappings: Array<{ placeholder: string; original: string; type: string }> = [];
+
+  // Prompt Preview & Manual Redaction Section
+  const previewSection = document.createElement('div');
+  previewSection.className = 'preview-section';
+  previewSection.id = 'ratchet-preview-section';
+
+  const previewHeader = document.createElement('div');
+  previewHeader.className = 'preview-header';
+  previewHeader.innerHTML = `
+    <span>Prompt Preview</span>
+    <span style="font-size: 11px; color: #64748b; font-weight: normal; text-transform: none;">Select text to redact</span>
+  `;
+
+  const previewBox = document.createElement('div');
+  previewBox.id = 'ratchet-preview-text';
+  previewBox.className = 'preview-box';
+  previewBox.textContent = currentRedactedText;
+
+  const manualToolbar = document.createElement('div');
+  manualToolbar.id = 'ratchet-manual-toolbar';
+  manualToolbar.className = 'manual-toolbar';
+  manualToolbar.innerHTML = `
+    <span>Selected:</span>
+    <span id="ratchet-selected-text" class="manual-selected-text"></span>
+    <select id="ratchet-manual-category" class="manual-cat-select">
+      <option value="PERSON">Name (PERSON)</option>
+      <option value="ORG">Employer (ORG)</option>
+      <option value="PROJECT">Project (PROJECT)</option>
+      <option value="LOCATION">Place (LOCATION)</option>
+    </select>
+    <label class="manual-add-terms-label">
+      <input type="checkbox" id="ratchet-cb-add-terms" checked />
+      <span>Also add to My sensitive terms</span>
+    </label>
+    <button type="button" id="ratchet-btn-manual-redact" class="manual-btn-redact">
+      Redact All Occurrences
+    </button>
+  `;
+
+  previewSection.appendChild(previewHeader);
+  previewSection.appendChild(previewBox);
+  previewSection.appendChild(manualToolbar);
+  content.appendChild(previewSection);
+
   // Items List
   const itemsList = document.createElement('div');
   itemsList.className = 'items-list';
 
-  options.items.forEach((item, idx) => {
+  const renderItemCard = (item: ReviewItem, idx: number) => {
     const card = document.createElement('div');
     card.className = 'item-card';
     card.id = `ratchet-item-${idx}`;
@@ -515,6 +651,74 @@ export function showReviewPanel(options: ReviewPanelOptions): { close: () => voi
     }
 
     itemsList.appendChild(card);
+  };
+
+  options.items.forEach((item, idx) => {
+    renderItemCard(item, idx);
+  });
+
+  // Manual Redaction Interaction
+  let selectedPhrase = '';
+  const selectedTextSpan = manualToolbar.querySelector('#ratchet-selected-text')!;
+  const catSelect = manualToolbar.querySelector<HTMLSelectElement>('#ratchet-manual-category')!;
+  const cbAddTerms = manualToolbar.querySelector<HTMLInputElement>('#ratchet-cb-add-terms')!;
+  const btnManualRedact = manualToolbar.querySelector<HTMLButtonElement>('#ratchet-btn-manual-redact')!;
+
+  const handleSelection = () => {
+    const sel = (shadow as any).getSelection ? (shadow as any).getSelection() : window.getSelection();
+    const str = sel ? sel.toString().trim() : '';
+    if (str.length > 0 && !str.includes('«') && !str.includes('»')) {
+      selectedPhrase = str;
+      selectedTextSpan.textContent = `"${str}"`;
+      manualToolbar.classList.add('active');
+    }
+  };
+
+  previewBox.addEventListener('mouseup', handleSelection);
+  previewBox.addEventListener('keyup', handleSelection);
+  shadow.addEventListener('mouseup', handleSelection);
+
+  btnManualRedact.addEventListener('click', () => {
+    if (!selectedPhrase) return;
+    const phrase = selectedPhrase;
+    const cat = catSelect.value;
+    const addTerms = cbAddTerms.checked;
+
+    // Calculate next counter for this category
+    const catCount = options.items.filter((i) => i.category === cat).length + 1;
+    const placeholder = `«${cat}_${catCount}»`;
+
+    // Redact every occurrence in currentRedactedText (case-insensitive, whole-word)
+    const escaped = escapeRegex(phrase);
+    const re = new RegExp(`\\b${escaped}(?:['’]s\\b|['’](?!\\w)|\\b)`, 'gi');
+    currentRedactedText = currentRedactedText.replace(re, placeholder);
+    previewBox.textContent = currentRedactedText;
+
+    const newItem: ReviewItem = {
+      category: cat,
+      original: phrase,
+      placeholder,
+    };
+    const newIdx = options.items.length;
+    options.items.push(newItem);
+    unredactedStates.push(false);
+    sessionExemptions.push(false);
+    manualMappings.push({
+      placeholder,
+      original: phrase,
+      type: cat,
+    });
+
+    renderItemCard(newItem, newIdx);
+    countBanner.innerHTML = `<span><strong>${options.items.length}</strong> items detected</span>
+      <span style="font-size: 12px; color: #94a3b8;">Original values stay local</span>`;
+
+    if (addTerms && options.onAddSensitiveTerm) {
+      options.onAddSensitiveTerm(phrase, cat);
+    }
+
+    selectedPhrase = '';
+    manualToolbar.classList.remove('active');
   });
 
   content.appendChild(itemsList);
@@ -584,9 +788,9 @@ export function showReviewPanel(options: ReviewPanelOptions): { close: () => voi
   };
 
   const handleSendRedacted = () => {
-    // Build final wire text by starting from redacted text,
+    // Build final wire text by starting from currentRedactedText (which includes any manual redactions),
     // and replacing back any items marked as un-redacted
-    let finalWireText = options.redactedText;
+    let finalWireText = currentRedactedText;
     options.items.forEach((item, idx) => {
       if (unredactedStates[idx]) {
         finalWireText = finalWireText.split(item.placeholder).join(item.original);
@@ -597,7 +801,7 @@ export function showReviewPanel(options: ReviewPanelOptions): { close: () => voi
     });
 
     closePanel();
-    options.onSend(finalWireText);
+    options.onSend(finalWireText, manualMappings);
   };
 
   const handleCancel = (reason: string) => {
@@ -670,4 +874,8 @@ function escapeHtml(str: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

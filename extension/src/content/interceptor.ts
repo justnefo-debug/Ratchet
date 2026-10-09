@@ -124,7 +124,20 @@ export class ContentInterceptor {
                     skippedRules,
                     warnings: response.data?.warnings || [],
                     timeoutSeconds: settings?.reviewTimeoutSeconds ?? 60,
-                    onSend: (finalWireText: string) => {
+                    onSend: async (finalWireText: string, manualMappings?: Array<{ placeholder: string; original: string; type: string }>) => {
+                      if (manualMappings && manualMappings.length > 0) {
+                        await new Promise<void>((resolve) => {
+                          chrome.runtime.sendMessage(
+                            {
+                              action: 'addMappingEntries',
+                              conversationId,
+                              siteOrigin: window.location.origin,
+                              newEntries: manualMappings,
+                            },
+                            () => resolve(),
+                          );
+                        });
+                      }
                       window.dispatchEvent(new CustomEvent('ratchet:mapping-updated'));
                       window.postMessage(
                         {
@@ -155,6 +168,12 @@ export class ContentInterceptor {
                     },
                     onSessionExempt: (val: string) => {
                       this.sessionExemptions.add(val);
+                    },
+                    onAddSensitiveTerm: (term: string, category: string) => {
+                      chrome.runtime.sendMessage({
+                        action: 'addSensitiveTerm',
+                        term: { term, category },
+                      });
                     },
                   });
                 } else {

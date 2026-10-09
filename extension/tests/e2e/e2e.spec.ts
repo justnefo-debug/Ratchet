@@ -783,6 +783,15 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
     await page.mouse.click(centerX, centerY);
   }
 
+  async function setCdpSelectValue(client: any, node: any, value: string) {
+    expect(node, 'Node to select value on must exist').toBeTruthy();
+    const { object } = await client.send('DOM.resolveNode', { nodeId: node.nodeId });
+    await client.send('Runtime.callFunctionOn', {
+      objectId: object.objectId,
+      functionDeclaration: `function() { this.value = ${JSON.stringify(value)}; this.dispatchEvent(new Event("change")); }`,
+    });
+  }
+
   async function updateSettings(settingsToApply: any) {
     const managePage = await context.newPage();
     await managePage.goto(`chrome-extension://${extensionId}/src/options/options.html`);
@@ -1255,6 +1264,145 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
 
     // Clean up
     await updateSettings({ sensitiveTerms: [] });
+  });
+
+  // ─── Test 21: Manual Redaction in Review Panel & Sensitive Term Enrollment ───
+  test('21: Manual redaction in review panel: user selects text in prompt preview, picks category, redacts all occurrences, enrolls sensitive term, with closed Shadow DOM isolation', async () => {
+    // Enable review for mock site
+    await updateSettings({
+      reviewBeforeSend: true,
+      reviewSites: { chatgpt: true, claude: true, gemini: true, mock: true },
+      reviewTimeoutSeconds: 60,
+      sensitiveTerms: [],
+    });
+
+    const convId = 'conv-manual-redaction-e2e';
+    await page.goto(`http://127.0.0.1:${PORT}/?c=${convId}`);
+    await page.waitForLoadState('networkidle');
+    server.clearLoggedRequests();
+
+    // Prompt contains an automatically detected email AND an unrecognized project name "Chimera" appearing twice
+    const promptText =
+      'Chimera project briefing for admin@internal.example.org. Deploy Chimera infrastructure immediately.';
+    await page.locator('#prompt-textarea').fill(promptText);
+    await page.locator('#send-textarea-btn').click();
+
+    // 1. Wait for review panel host to appear in DOM
+    await page.waitForSelector('#ratchet-review-host', { state: 'attached', timeout: 5000 });
+    const { client, shadowRoot } = await getCdpShadowRoot(page);
+
+    // 2. Verify initial state: only 1 standard item detected (EMAIL)
+    const previewBoxNode = findNodeByPredicate(shadowRoot, (n) => getNodeAttr(n, 'id') === 'ratchet-preview-text');
+    expect(previewBoxNode, 'Preview box element should exist in review panel').toBeTruthy();
+    expect(getNodeText(previewBoxNode)).toContain('«EMAIL_1»');
+    expect(getNodeText(previewBoxNode)).toContain('Chimera');
+
+    // 3. User selects "Chimera" (first word of preview box) by double-clicking it
+    const { model: previewModel } = await client.send('DOM.getBoxModel', { nodeId: previewBoxNode.nodeId });
+    const clickX = previewModel.content[0] + 25;
+    const clickY = previewModel.content[1] + 15;
+    await page.mouse.dblclick(clickX, clickY);
+
+    // 4. Re-query shadow root on SAME CDP client to inspect active manual toolbar
+    const { root: root2 } = await client.send('DOM.getDocument', { depth: -1, pierce: true });
+    const rootAfterSelect = findNodeByPredicate(root2, (n) => getNodeAttr(n, 'id') === 'ratchet-review-host')?.shadowRoots?.[0];
+    expect(rootAfterSelect, 'Shadow root after select must exist').toBeTruthy();
+
+    const toolbarNode = findNodeByPredicate(rootAfterSelect, (n) => getNodeAttr(n, 'id') === 'ratchet-manual-toolbar');
+    expect(toolbarNode, 'Manual redaction toolbar should exist').toBeTruthy();
+    const toolbarCls = getNodeAttr(toolbarNode, 'class');
+    expect(toolbarCls).toContain('active');
+
+    const selectedSpanNode = findNodeByPredicate(rootAfterSelect, (n) => getNodeAttr(n, 'id') === 'ratchet-selected-text');
+    expect(getNodeText(selectedSpanNode)).toContain('Chimera');
+
+    // 5. Select category "PROJECT"
+    const catSelectNode = findNodeByPredicate(rootAfterSelect, (n) => getNodeAttr(n, 'id') === 'ratchet-manual-category');
+    expect(catSelectNode).toBeTruthy();
+    await setCdpSelectValue(client, catSelectNode, 'PROJECT');
+
+    // 6. Click "Redact All Occurrences" button
+    const redactBtnNode = findNodeByPredicate(rootAfterSelect, (n) => getNodeAttr(n, 'id') === 'ratchet-btn-manual-redact');
+    expect(redactBtnNode).toBeTruthy();
+    await clickCdpNode(client, page, redactBtnNode);
+
+    // 7. Verify prompt preview now displays placeholder «PROJECT_1» replacing all occurrences of "Chimera"
+    const { root: root3 } = await client.send('DOM.getDocument', { depth: -1, pierce: true });
+    const rootAfterRedact = findNodeByPredicate(root3, (n) => getNodeAttr(n, 'id') === 'ratchet-review-host')?.shadowRoots?.[0];
+    expect(rootAfterRedact, 'Shadow root after redact must exist').toBeTruthy();
+
+    const updatedPreviewNode = findNodeByPredicate(rootAfterRedact, (n) => getNodeAttr(n, 'id') === 'ratchet-preview-text');
+    const previewContent = getNodeText(updatedPreviewNode);
+    expect(previewContent).toContain('«PROJECT_1»');
+    expect(previewContent).toContain('«EMAIL_1»');
+    expect(previewContent).not.toContain('Chimera');
+
+    // 8. Verify items list now has 2 cards (including newly added PROJECT card)
+    const cardNodes = findAllNodesByPredicate(rootAfterRedact, (n) => {
+      const cls = getNodeAttr(n, 'class');
+      return cls ? cls.includes('item-card') : false;
+    });
+    expect(cardNodes.length).toBe(2);
+    const cardsText = cardNodes.map((c) => getNodeText(c)).join(' --- ');
+    expect(cardsText).toContain('PROJECT');
+    expect(cardsText).toContain('Chimera');
+    expect(cardsText).toContain('«PROJECT_1»');
+
+    // 9. Confirm sending via Enter key (default: Send Redacted)
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('#ratchet-review-host', { state: 'detached', timeout: 5000 });
+
+    // 10. Verify wire request: server logged body contains placeholders and ZERO sensitive text
+    await expect(page.locator('#status')).toHaveText('Completed', { timeout: 15000 });
+    expect(server.loggedRequests.length).toBe(1);
+    const wireBody = server.loggedRequests[0].body;
+
+    // Zero-leakage assertions:
+    expect(wireBody).toContain('«PROJECT_1»');
+    expect(wireBody).toContain('«EMAIL_1»');
+    expect(wireBody).not.toContain('Chimera');
+    expect(wireBody).not.toContain('admin@internal.example.org');
+
+    // 11. Verify displayed reply restores both manually redacted and standard items
+    const assistantMsg = page.locator('.assistant-message').last();
+    await expect(assistantMsg).toBeVisible();
+    await expect(assistantMsg).toContainText('Chimera');
+    await expect(assistantMsg).toContainText('admin@internal.example.org');
+
+    // 12. Verify term was enrolled into "My sensitive terms" in chrome.storage.local
+    const optionsPage = await context.newPage();
+    await optionsPage.goto(`chrome-extension://${extensionId}/src/options/options.html`);
+    const storedTerms = await optionsPage.evaluate(async () => {
+      const data: any = await chrome.storage.local.get('ratchet_settings');
+      return data.ratchet_settings?.sensitiveTerms || [];
+    });
+    await optionsPage.close();
+
+    const enrolledTerm = storedTerms.find((t: any) => t.term.toLowerCase() === 'chimera');
+    expect(enrolledTerm, 'Manually redacted term should be enrolled in sensitiveTerms').toBeTruthy();
+    expect(enrolledTerm.category).toBe('PROJECT');
+
+    // 13. Verify closed Shadow DOM isolation guarantee: page JS cannot pierce or read shadow DOM
+    const pageJsAccess = await page.evaluate(() => {
+      const host = document.querySelector('#ratchet-review-host') as HTMLElement | null;
+      return {
+        shadowRootIsNull: host ? host.shadowRoot === null : true,
+        querySelectorCard: document.querySelector('.item-card') !== null,
+        querySelectorPreview: document.querySelector('#ratchet-preview-text') !== null,
+      };
+    });
+    expect(pageJsAccess.shadowRootIsNull).toBe(true);
+    expect(pageJsAccess.querySelectorCard).toBe(false);
+    expect(pageJsAccess.querySelectorPreview).toBe(false);
+
+    // Clean up
+    await updateSettings({
+      reviewBeforeSend: true,
+      reviewSites: { chatgpt: true, claude: true, mock: false },
+      sensitiveTerms: [],
+    });
+
+    await client.detach();
   });
 });
 

@@ -22,7 +22,7 @@ import {
   recordSessionRedaction,
 } from './storage';
 import { SENSITIVITY_THRESHOLDS } from '../shared/constants';
-import type { DetectedEntity } from '../shared/types';
+import type { DetectedEntity, SensitiveTerm } from '../shared/types';
 
 if (typeof chrome !== 'undefined' && chrome.runtime?.onInstalled) {
   chrome.runtime.onInstalled.addListener(() => {
@@ -77,6 +77,58 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
   if (request.action === 'clearAllMappings') {
     clearAllMappings()
       .then(() => sendResponse({ success: true }))
+      .catch((err) => sendResponse({ success: false, error: err.toString() }));
+    return true;
+  }
+
+  if (request.action === 'addMappingEntries') {
+    const convId = request.conversationId || 'default';
+    const newEntries = request.newEntries || [];
+    getConversationMapping(convId)
+      .then(async (convMap) => {
+        const existing = convMap?.entries || [];
+        const merged = [...existing];
+        for (const entry of newEntries) {
+          if (!merged.some((m) => m.placeholder === entry.placeholder)) {
+            merged.push(entry);
+          }
+        }
+        await saveConversationMapping({
+          conversationId: convId,
+          siteOrigin: request.siteOrigin || convMap?.siteOrigin || '',
+          entries: merged,
+          createdAt: convMap?.createdAt || Date.now(),
+          lastUsedAt: Date.now(),
+        });
+        sendResponse({ success: true });
+      })
+      .catch((err) => sendResponse({ success: false, error: err.toString() }));
+    return true;
+  }
+
+  if (request.action === 'addSensitiveTerm') {
+    getSettings()
+      .then(async (settings) => {
+        const currentTerms = settings.sensitiveTerms || [];
+        const exists = currentTerms.some(
+          (t) =>
+            t.term.toLowerCase() === request.term.term.toLowerCase() &&
+            t.category === request.term.category,
+        );
+        if (!exists && request.term?.term) {
+          const newTerm: SensitiveTerm = {
+            id: `term-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            term: request.term.term,
+            category: request.term.category || 'PROJECT',
+            enabled: true,
+          };
+          const updated = [...currentTerms, newTerm];
+          await chrome.storage.local.set({
+            ratchet_settings: { ...settings, sensitiveTerms: updated },
+          });
+        }
+        sendResponse({ success: true });
+      })
       .catch((err) => sendResponse({ success: false, error: err.toString() }));
     return true;
   }
