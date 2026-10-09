@@ -36,3 +36,60 @@ describe('ReDoS Safety Check', () => {
     });
   }
 });
+
+import { validateRegexSafety } from '../src/detectors/redos-validator';
+
+describe('Custom Rule ReDoS Validator (validateRegexSafety)', () => {
+  it('accepts safe, well-formed regular expressions', () => {
+    const safePatterns = [
+      'PRJ-[A-Z0-9]{4,8}',
+      '\\bCONFIDENTIAL-[0-9]+\\b',
+      'USER_[a-f0-9]{16}',
+      'ACME_[A-Z]{3}_[0-9]{4}',
+      '\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b',
+    ];
+
+    for (const pat of safePatterns) {
+      const res = validateRegexSafety(pat);
+      expect(res.valid, `Expected "${pat}" to be valid, got: ${res.error}`).toBe(true);
+      expect(res.error).toBeUndefined();
+    }
+  });
+
+  it('rejects empty and whitespace-only patterns', () => {
+    expect(validateRegexSafety('').valid).toBe(false);
+    expect(validateRegexSafety('   ').valid).toBe(false);
+  });
+
+  it('rejects malformed syntax cleanly with an informative error message', () => {
+    const invalidPatterns = [
+      '[a-z',
+      '(?<',
+      'abc(',
+      '*abc',
+    ];
+
+    for (const pat of invalidPatterns) {
+      const res = validateRegexSafety(pat);
+      expect(res.valid).toBe(false);
+      expect(res.error).toContain('Invalid regular expression');
+    }
+  });
+
+  it('detects and rejects catastrophic nested quantifiers (ReDoS risk)', () => {
+    const dangerousPatterns = [
+      '(a+)+$',
+      '(a+)*$',
+      '([a-zA-Z]+)*$',
+      '(x+)+y',
+      '([0-9]*)*',
+    ];
+
+    for (const pat of dangerousPatterns) {
+      const res = validateRegexSafety(pat);
+      expect(res.valid, `Expected ReDoS rejection for "${pat}"`).toBe(false);
+      expect(res.error).toMatch(/ReDoS|nested repetition/i);
+    }
+  });
+});
+

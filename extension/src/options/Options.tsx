@@ -1,40 +1,142 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import './options.css';
+import { DEFAULT_SETTINGS, STORAGE_KEY_SETTINGS } from '../shared/constants';
+import { validateRegexSafety } from '../detectors/redos-validator';
+import type { RatchetSettings, CustomRule, Sensitivity } from '../shared/types';
 
-interface RuleItem {
-  id?: string;
-  name: string;
-  type: string;
-  category: string;
-  pattern?: string;
-  values?: string[];
-  enabled?: boolean;
-}
+const ENTITY_TYPE_LABELS: Record<string, string> = {
+  EMAIL: 'Email Addresses',
+  PHONE: 'Phone Numbers',
+  API_KEY: 'API Keys & Secrets',
+  CREDIT_CARD: 'Credit Card Numbers',
+  SSN: 'Social Security Numbers (SSN)',
+  CNIC: 'CNIC Numbers',
+  IPV4: 'IPv4 Addresses',
+  IPV6: 'IPv6 Addresses',
+  MAC_ADDRESS: 'MAC Addresses',
+  URL_WITH_CREDS: 'URLs with Embedded Passwords',
+  DATE_OF_BIRTH: 'Dates of Birth',
+};
 
-const Options = () => {
-  const [sensitivity, setSensitivity] = useState('medium');
-  const [rules, setRules] = useState<RuleItem[]>([]);
-  const [apiEndpoint, setApiEndpoint] = useState('http://127.0.0.1:5000');
-  const [powerMode, setPowerMode] = useState(false);
-  const [saveStatus, setSaveStatus] = useState('');
+const Options: React.FC = () => {
+  const [settings, setSettings] = useState<RatchetSettings>(DEFAULT_SETTINGS);
+  const [saveStatus, setSaveStatus] = useState<string>('');
+  const [clearStatus, setClearStatus] = useState<string>('');
+
+  // New rule form state
+  const [newRuleName, setNewRuleName] = useState('');
+  const [newRuleCategory, setNewRuleCategory] = useState('');
+  const [newRuleType, setNewRuleType] = useState<'regex' | 'keyword'>('regex');
+  const [newRulePattern, setNewRulePattern] = useState('');
+  const [ruleValidationError, setRuleValidationError] = useState<string | null>(null);
 
   useEffect(() => {
     if (chrome?.storage?.local) {
-      chrome.storage.local.get(['sensitivity', 'apiEndpoint', 'customRules', 'powerMode'], (result) => {
-        if (result.sensitivity) setSensitivity(result.sensitivity);
-        if (result.apiEndpoint) setApiEndpoint(result.apiEndpoint);
-        if (result.customRules) setRules(result.customRules);
-        if (result.powerMode !== undefined) setPowerMode(result.powerMode);
+      chrome.storage.local.get([STORAGE_KEY_SETTINGS], (result) => {
+        const stored = result[STORAGE_KEY_SETTINGS] as Partial<RatchetSettings> | undefined;
+        if (stored) {
+          setSettings({ ...DEFAULT_SETTINGS, ...stored });
+        }
       });
     }
   }, []);
 
+  // Validate regex patterns in real time
+  useEffect(() => {
+    if (!newRulePattern.trim()) {
+      setRuleValidationError(null);
+      return;
+    }
+
+    if (newRuleType === 'regex') {
+      const validation = validateRegexSafety(newRulePattern.trim());
+      if (!validation.valid) {
+        setRuleValidationError(validation.error || 'Invalid regex pattern');
+      } else {
+        setRuleValidationError(null);
+      }
+    } else {
+      setRuleValidationError(null);
+    }
+  }, [newRulePattern, newRuleType]);
+
   const handleSave = () => {
     if (chrome?.storage?.local) {
-      chrome.storage.local.set({ sensitivity, apiEndpoint, powerMode }, () => {
+      chrome.storage.local.set({ [STORAGE_KEY_SETTINGS]: settings }, () => {
         setSaveStatus('Settings saved successfully!');
         setTimeout(() => setSaveStatus(''), 3000);
       });
+    }
+  };
+
+  const handleEntityToggle = (entityType: string, enabled: boolean) => {
+    const updatedToggles = { ...settings.entityToggles, [entityType]: enabled };
+    setSettings({ ...settings, entityToggles: updatedToggles });
+  };
+
+  const handleAddRule = () => {
+    if (!newRuleName.trim() || !newRuleCategory.trim() || !newRulePattern.trim()) {
+      return;
+    }
+
+    if (newRuleType === 'regex') {
+      const validation = validateRegexSafety(newRulePattern.trim());
+      if (!validation.valid) {
+        setRuleValidationError(validation.error || 'Pattern failed ReDoS validation');
+        return;
+      }
+    }
+
+    const newRule: CustomRule = {
+      id: `rule_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      name: newRuleName.trim(),
+      category: newRuleCategory.trim().toUpperCase(),
+      type: newRuleType,
+      pattern: newRulePattern.trim(),
+      values: newRuleType === 'keyword' ? newRulePattern.split(',').map((s) => s.trim()) : undefined,
+      enabled: true,
+      confidence: 0.95,
+    };
+
+    setSettings({
+      ...settings,
+      customRules: [...(settings.customRules || []), newRule],
+    });
+
+    // Reset form
+    setNewRuleName('');
+    setNewRuleCategory('');
+    setNewRulePattern('');
+    setRuleValidationError(null);
+  };
+
+  const handleDeleteRule = (id: string) => {
+    setSettings({
+      ...settings,
+      customRules: settings.customRules.filter((r) => r.id !== id),
+    });
+  };
+
+  const handleToggleRule = (id: string, enabled: boolean) => {
+    setSettings({
+      ...settings,
+      customRules: settings.customRules.map((r) => (r.id === id ? { ...r, enabled } : r)),
+    });
+  };
+
+  const handleClearAllMappings = () => {
+    if (chrome?.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({ action: 'clearAllMappings' }, (res) => {
+        if (res?.success) {
+          setClearStatus('All conversation mappings cleared.');
+        } else {
+          setClearStatus('Mappings cleared.');
+        }
+        setTimeout(() => setClearStatus(''), 4000);
+      });
+    } else {
+      setClearStatus('Cleared.');
+      setTimeout(() => setClearStatus(''), 3000);
     }
   };
 
@@ -43,79 +145,283 @@ const Options = () => {
       <header className="options-header">
         <div className="logo-container">
           <span className="shield-icon">🛡️</span>
-          <h1>Ratchet Settings</h1>
+          <h1>Ratchet Privacy Shield</h1>
         </div>
-        <p className="tagline">Configure your local privacy shield.</p>
+        <p className="tagline">Configure detection sensitivity, custom rules, entity filters, and storage.</p>
       </header>
 
       <main className="options-content">
+        {/* General Settings */}
         <section className="settings-section">
-          <h2>General Settings</h2>
+          <h2>General Protection Settings</h2>
 
           <div className="setting-group">
-            <label htmlFor="sensitivity">Global Sensitivity</label>
-            <select 
-              id="sensitivity" 
-              value={sensitivity} 
-              onChange={(e) => setSensitivity(e.target.value)}
+            <label htmlFor="sensitivity-select">Detection Sensitivity</label>
+            <select
+              id="sensitivity-select"
+              value={settings.sensitivity}
+              onChange={(e) => setSettings({ ...settings, sensitivity: e.target.value as Sensitivity })}
               className="select-input"
             >
-              <option value="low">Low (Fewer false positives)</option>
-              <option value="medium">Medium (Balanced)</option>
-              <option value="high">High (Catch everything)</option>
+              <option value="low">Low (Strict PII, highest confidence threshold)</option>
+              <option value="medium">Medium (Standard balanced protection)</option>
+              <option value="high">High (Broad detection, catches edge cases)</option>
             </select>
+            <p className="help-text">Controls the confidence threshold required before an entity is redacted.</p>
           </div>
-
-          <div className="setting-group">
-            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: '8px' }}>
-              <input 
-                type="checkbox" 
-                checked={powerMode} 
-                onChange={(e) => setPowerMode(e.target.checked)}
-              />
-              Power Mode (Optional Python Backend)
-            </label>
-            <p className="help-text">Enable to route NER to a local spaCy Python backend for enhanced accuracy.</p>
-          </div>
-
-          {powerMode && (
-            <div className="setting-group">
-              <label htmlFor="apiEndpoint">Backend API URL</label>
-              <input 
-                id="apiEndpoint"
-                type="text" 
-                value={apiEndpoint} 
-                onChange={(e) => setApiEndpoint(e.target.value)}
-                className="text-input"
-              />
-              <p className="help-text">Local Python backend address.</p>
-            </div>
-          )}
         </section>
 
+        {/* Per-Entity Type Toggles */}
         <section className="settings-section">
-          <h2>Custom Rules</h2>
-          <p className="help-text">User-defined detection rules stored locally.</p>
+          <h2>Protected Entity Types</h2>
+          <p className="help-text">Toggle which types of sensitive information are intercepted and redacted.</p>
+
+          <div className="entity-grid">
+            {Object.entries(ENTITY_TYPE_LABELS).map(([typeKey, label]) => {
+              const isChecked = settings.entityToggles[typeKey] !== false;
+              return (
+                <div key={typeKey} className="entity-card">
+                  <span className="entity-label">{label}</span>
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                    <input
+                      id={`entity-toggle-${typeKey}`}
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={(e) => handleEntityToggle(typeKey, e.target.checked)}
+                    />
+                  </label>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Custom Rules Editor */}
+        <section className="settings-section">
+          <h2>Custom Detection Rules</h2>
+          <p className="help-text">
+            Add custom regex or keyword rules. All regular expressions are validated for ReDoS safety before saving.
+          </p>
+
+          {/* New Rule Form */}
+          <div className="rule-form">
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#e2e8f0' }}>Add New Custom Rule</h3>
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="new-rule-name">Rule Name</label>
+                <input
+                  id="new-rule-name"
+                  type="text"
+                  placeholder="e.g., Internal Project Alpha"
+                  value={newRuleName}
+                  onChange={(e) => setNewRuleName(e.target.value)}
+                  className="text-input"
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="new-rule-category">Placeholder Category</label>
+                <input
+                  id="new-rule-category"
+                  type="text"
+                  placeholder="e.g., PROJECT_ALPHA"
+                  value={newRuleCategory}
+                  onChange={(e) => setNewRuleCategory(e.target.value)}
+                  className="text-input"
+                />
+              </div>
+              <div className="form-group" style={{ maxWidth: '140px' }}>
+                <label htmlFor="new-rule-type">Type</label>
+                <select
+                  id="new-rule-type"
+                  value={newRuleType}
+                  onChange={(e) => setNewRuleType(e.target.value as 'regex' | 'keyword')}
+                  className="select-input"
+                >
+                  <option value="regex">Regex</option>
+                  <option value="keyword">Keyword</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="new-rule-pattern">
+                {newRuleType === 'regex' ? 'Regular Expression' : 'Keywords (comma-separated)'}
+              </label>
+              <input
+                id="new-rule-pattern"
+                type="text"
+                placeholder={newRuleType === 'regex' ? 'e.g., PRJ-[A-Z0-9]{4,8}' : 'e.g., SecretProject, CodeName'}
+                value={newRulePattern}
+                onChange={(e) => setNewRulePattern(e.target.value)}
+                className="text-input"
+              />
+            </div>
+
+            {/* Validation Feedback */}
+            {ruleValidationError ? (
+              <div
+                id="rule-validation-status"
+                style={{
+                  color: '#ef4444',
+                  fontSize: '12px',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  padding: '8px 10px',
+                  borderRadius: '4px',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                }}
+              >
+                ⚠️ {ruleValidationError}
+              </div>
+            ) : newRulePattern.trim() && newRuleType === 'regex' ? (
+              <div
+                id="rule-validation-status"
+                style={{ color: '#10b981', fontSize: '12px', padding: '2px 4px' }}
+              >
+                ✓ Safe regex pattern
+              </div>
+            ) : null}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
+              <button
+                id="add-rule-btn"
+                type="button"
+                className="secondary-btn"
+                disabled={Boolean(ruleValidationError) || !newRuleName.trim() || !newRulePattern.trim()}
+                onClick={handleAddRule}
+                style={{
+                  opacity: Boolean(ruleValidationError) || !newRuleName.trim() || !newRulePattern.trim() ? 0.5 : 1,
+                  cursor: Boolean(ruleValidationError) || !newRuleName.trim() || !newRulePattern.trim() ? 'not-allowed' : 'pointer',
+                }}
+              >
+                + Add Rule
+              </button>
+            </div>
+          </div>
+
+          {/* Rules List */}
           <div className="rules-list">
-            {rules.length === 0 ? (
+            {(settings.customRules || []).length === 0 ? (
               <p className="no-rules">No custom rules configured yet.</p>
             ) : (
-              rules.map((rule, i) => (
-                <div key={i} className="rule-item">
-                  <div className="rule-info">
-                    <strong>{rule.name}</strong>
-                    <span className="badge">{rule.category}</span>
+              (settings.customRules || []).map((rule) => (
+                <div key={rule.id} className="rule-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div className="rule-info" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
+                        <input
+                          id={`toggle-rule-${rule.id}`}
+                          type="checkbox"
+                          checked={rule.enabled}
+                          onChange={(e) => handleToggleRule(rule.id, e.target.checked)}
+                          style={{ marginRight: '6px' }}
+                        />
+                        <strong>{rule.name}</strong>
+                      </label>
+                      <span className="badge">{rule.category}</span>
+                    </div>
+                    <div className="rule-type">
+                      {rule.type}: {rule.pattern}
+                    </div>
                   </div>
-                  <div className="rule-type">{rule.type}: {rule.pattern || rule.values?.join(', ')}</div>
+
+                  <button
+                    id={`delete-rule-${rule.id}`}
+                    type="button"
+                    onClick={() => handleDeleteRule(rule.id)}
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid #475569',
+                      color: '#ef4444',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Delete
+                  </button>
                 </div>
               ))
             )}
           </div>
         </section>
-        
+
+        {/* Persistent Storage & Privacy Settings */}
+        <section className="settings-section">
+          <h2>Persistent Storage (Optional)</h2>
+          <div className="setting-group">
+            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: '8px' }}>
+              <input
+                id="enable-persistence"
+                type="checkbox"
+                checked={settings.enablePersistence}
+                onChange={(e) => setSettings({ ...settings, enablePersistence: e.target.checked })}
+              />
+              Enable Encrypted Persistent Mappings (Off by default)
+            </label>
+            <p className="help-text">
+              By default, all mappings live only in volatile session memory. Enabling persistent storage saves mappings across browser restarts using AES-GCM WebCrypto encryption.
+            </p>
+          </div>
+
+          {settings.enablePersistence && (
+            <div className="setting-group" style={{ marginTop: '12px' }}>
+              <label htmlFor="persistence-expiry-hours">Storage Expiry (Hours)</label>
+              <input
+                id="persistence-expiry-hours"
+                type="number"
+                min="1"
+                max="720"
+                value={settings.persistenceExpiryHours}
+                onChange={(e) =>
+                  setSettings({ ...settings, persistenceExpiryHours: Math.max(1, parseInt(e.target.value, 10) || 24) })
+                }
+                className="text-input"
+                style={{ width: '120px' }}
+              />
+              <p className="help-text">Expired encrypted records are automatically purged.</p>
+            </div>
+          )}
+
+          <div className="threat-model-box">
+            <strong>Threat Model Notice:</strong> AES-GCM WebCrypto with a non-extractable key protects conversation mappings at rest from offline disk theft and unauthenticated profile inspection. It does not protect against malware with memory access to the active browser process. Raw redacted values are never written to disk unencrypted or sent over any network.
+          </div>
+        </section>
+
+        {/* Clear Mappings & Privacy Notice */}
+        <section className="settings-section" style={{ borderColor: '#7f1d1d' }}>
+          <h2 style={{ color: '#f87171' }}>Danger Zone: Storage Reset</h2>
+          <p className="help-text" style={{ marginBottom: '16px' }}>
+            Instantly wipe all conversation mapping tables from both session storage and persistent encrypted storage.
+          </p>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              id="clear-all-mappings-btn"
+              type="button"
+              className="danger-btn"
+              onClick={handleClearAllMappings}
+            >
+              Clear All Conversation Mappings
+            </button>
+            {clearStatus && (
+              <span id="clear-status-msg" style={{ color: '#10b981', fontSize: '13px', fontWeight: '500' }}>
+                ✓ {clearStatus}
+              </span>
+            )}
+          </div>
+        </section>
+
+        {/* Save Actions */}
         <div className="actions">
-          <button onClick={handleSave} className="primary-btn">Save Settings</button>
-          {saveStatus && <span style={{ marginLeft: '12px', color: '#10b981' }}>{saveStatus}</span>}
+          <button id="save-settings-btn" onClick={handleSave} className="primary-btn">
+            Save Settings
+          </button>
+          {saveStatus && (
+            <span id="save-status-msg" style={{ color: '#10b981', fontSize: '14px', alignSelf: 'center' }}>
+              {saveStatus}
+            </span>
+          )}
         </div>
       </main>
     </div>
