@@ -31,13 +31,33 @@ export async function getConversationMapping(
     const key = `${STORAGE_KEY_CONV_PREFIX}${conversationId}`;
     const sessionMapping = await new Promise<ConversationMapping | null>((resolve) => {
       chrome.storage.session.get([key], (result) => {
-        const mapping = result[key] as ConversationMapping | undefined;
-        resolve(mapping || null);
+        resolve((result[key] as ConversationMapping) || null);
       });
     });
 
     if (sessionMapping) {
       return sessionMapping;
+    }
+
+    // Fallback: If no mapping is found for the current id, fall back to the most recent mapping.
+    const allItems = await new Promise<any>((resolve) => chrome.storage.session.get(null, resolve));
+    let mostRecent: ConversationMapping | null = null;
+    let highestTime = 0;
+    for (const k of Object.keys(allItems || {})) {
+      if (k.startsWith(STORAGE_KEY_CONV_PREFIX)) {
+        const m = allItems[k] as ConversationMapping;
+        if (m && m.lastUsedAt > highestTime) {
+          highestTime = m.lastUsedAt;
+          mostRecent = m;
+        }
+      }
+    }
+    
+    if (mostRecent) {
+      // Migrate it to the current conversation ID
+      await migrateConversationMapping(mostRecent.conversationId, conversationId);
+      mostRecent.conversationId = conversationId;
+      return mostRecent;
     }
   }
 
