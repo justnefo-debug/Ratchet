@@ -17,15 +17,19 @@
 - **U4: Update HANDOFF.md**: Finalized handoff documentation.
 - **Real-site Interception Fixes**:
   - `ChatGPTAdapter` now matches request by shape (`messages` array structure), not just URL path.
-  - Added debug lines in MAIN world interceptor (`RATCHET_DEBUG`), tracking paths (scrubbing UUIDs) and call styles (`fetch string URL`, `fetch Request`, `XHR`).
+  - Added debug lines in MAIN world interceptor (`window.__RATCHET_DEBUG__`), tracking paths (scrubbing UUIDs) and call styles (`fetch string URL`, `fetch Request`, `XHR`).
   - Added support for various `fetch` call styles (string, `Request` object, `Blob` body) and `XHR`.
   - Added E2E Test 22 to verify unfamiliar paths, call styles, and debug line output.
+- **Restoration Fixes**:
+  - Fixed `restorer.ts` to be independent of class names: uses `TreeWalker` and `MutationObserver` on document body, skips inputs/textarea/ProseMirror, handles adjacent text nodes and code blocks. Debounces via `requestAnimationFrame`.
+  - Fixed `storage.ts` aggressive fallback mapping logic to correctly migrate temp mapping to the real conversation ID on URL change.
+  - Added Test 23 to `e2e.spec.ts` asserting restoration works on real DOM shape (split nodes, code elements, URL change via history.pushState).
 
 ## Important Note on `RATCHET_DEBUG`
-Before creating the final production package (`npm run package`), `RATCHET_DEBUG` in `extension/src/content/interceptor-main.ts` **must be set to `false`**. This ensures debug lines are disabled by default for users.
+Before creating the final production package (`npm run package`), `RATCHET_DEBUG` in `extension/src/content/interceptor-main.ts` is configured to read from `window.__RATCHET_DEBUG__`. It evaluates to `false` by default on production sites.
 
 ## In Progress
-- Complete! All tasks for submission are done.
+- Complete! All tasks for submission are done and `ratchet-v1.0.0.zip` is built.
 
 ## Next
 - Submit the project.
