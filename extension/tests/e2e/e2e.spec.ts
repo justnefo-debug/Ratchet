@@ -1412,6 +1412,10 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
     const consoleLogs: string[] = [];
     page.on('console', msg => consoleLogs.push(msg.text()));
 
+    await page.addInitScript(() => {
+      (window as any).__RATCHET_DEBUG__ = true;
+    });
+
     await page.goto(`http://127.0.0.1:${PORT}/?c=${convId}`);
     await page.waitForLoadState('networkidle');
     server.clearLoggedRequests();

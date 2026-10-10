@@ -14,7 +14,7 @@
  * - Unknown message shape (has messages but unexpected): fail closed
  */
 
-const RATCHET_DEBUG = false;
+const RATCHET_DEBUG = (window as any).__RATCHET_DEBUG__ === true;
 
 import { getAdapterForUrl } from '../adapters';
 import type { RequestClassification } from '../adapters/types';

@@ -39,25 +39,29 @@ export async function getConversationMapping(
       return sessionMapping;
     }
 
-    // Fallback: If no mapping is found for the current id, fall back to the most recent mapping.
-    const allItems = await new Promise<any>((resolve) => chrome.storage.session.get(null, resolve));
-    let mostRecent: ConversationMapping | null = null;
-    let highestTime = 0;
-    for (const k of Object.keys(allItems || {})) {
-      if (k.startsWith(STORAGE_KEY_CONV_PREFIX)) {
-        const m = allItems[k] as ConversationMapping;
-        if (m && m.lastUsedAt > highestTime) {
-          highestTime = m.lastUsedAt;
-          mostRecent = m;
+    // Fallback: If no mapping is found for the current id, fall back to the most recent mapping
+    // ONLY if the target ID is a real ID and the most recent mapping is a temp mapping.
+    if (conversationId !== 'default' && !conversationId.startsWith('temp-')) {
+      const allItems = await new Promise<any>((resolve) => chrome.storage.session.get(null, resolve));
+      let mostRecent: ConversationMapping | null = null;
+      let highestTime = 0;
+      for (const k of Object.keys(allItems || {})) {
+        if (k.startsWith(STORAGE_KEY_CONV_PREFIX)) {
+          const m = allItems[k] as ConversationMapping;
+          // Only fallback from a temp mapping
+          if (m && m.conversationId.startsWith('temp-') && m.lastUsedAt > highestTime) {
+            highestTime = m.lastUsedAt;
+            mostRecent = m;
+          }
         }
       }
-    }
-    
-    if (mostRecent) {
-      // Migrate it to the current conversation ID
-      await migrateConversationMapping(mostRecent.conversationId, conversationId);
-      mostRecent.conversationId = conversationId;
-      return mostRecent;
+      
+      if (mostRecent) {
+        // Migrate it to the current conversation ID
+        await migrateConversationMapping(mostRecent.conversationId, conversationId);
+        mostRecent.conversationId = conversationId;
+        return mostRecent;
+      }
     }
   }
 
