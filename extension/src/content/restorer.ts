@@ -16,9 +16,9 @@ import type { MappingEntry } from '../shared/types';
 export class ContentRestorer {
   private adapter = getAdapterForUrl(window.location.href);
   private cachedMappings: MappingEntry[] = [];
-  private observedContainers = new WeakSet<Element>();
   private isRestoring = false;
   private currentConvId: string | null = null;
+  private restoreRequested = false;
 
   constructor() {
     this.init();
@@ -29,29 +29,24 @@ export class ContentRestorer {
 
     this.updateMappings();
 
-    // 1. Find existing assistant message containers and observe them
-    this.attachObserversToExisting();
-
-    // 2. Observe document for new assistant containers being added
+    // Observe document body for any changes
     const rootObserver = new MutationObserver((mutations) => {
       if (this.isRestoring) return;
-      for (const mut of mutations) {
-        for (const added of Array.from(mut.addedNodes)) {
-          if (added instanceof HTMLElement) {
-            this.checkAndObserveContainer(added);
-          }
-        }
-      }
+      this.handleMutations(mutations);
     });
 
     rootObserver.observe(document.body || document.documentElement, {
       childList: true,
+      characterData: true,
       subtree: true,
     });
 
     // Refresh mappings periodically, on window focus, or when new redactions occur
     window.addEventListener('focus', () => this.updateMappings());
     window.addEventListener('ratchet:mapping-updated', () => this.updateMappings());
+    
+    // Initial pass
+    this.scheduleRestore();
   }
 
   private isUpdatingMappings = false;
@@ -60,9 +55,6 @@ export class ContentRestorer {
     return this.currentConvId;
   }
 
-  /**
-   * Fetch current conversation mappings from the service worker.
-   */
   public updateMappings(): void {
     if (!this.adapter || this.isUpdatingMappings) return;
     const convId = this.adapter.getConversationId(window.location.href) || 'default';
@@ -74,60 +66,12 @@ export class ContentRestorer {
         this.isUpdatingMappings = false;
         if (res && res.success && Array.isArray(res.data?.mappings)) {
           this.cachedMappings = res.data.mappings;
-          // Trigger scan on existing containers with fresh mappings
-          this.scanAllContainers();
+          this.scheduleRestore();
         }
       });
     } catch {
       this.isUpdatingMappings = false;
-      // Background worker might be idle
     }
-  }
-
-  private attachObserversToExisting(): void {
-    if (!this.adapter) return;
-    const selectors = this.adapter.getMessageSelectors();
-    for (const selector of selectors) {
-      const elements = document.querySelectorAll(selector);
-      elements.forEach((el) => this.observeContainer(el));
-    }
-  }
-
-  private checkAndObserveContainer(element: HTMLElement): void {
-    if (this.isEditable(element)) return;
-
-    if (!this.adapter) return;
-    const selectors = this.adapter.getMessageSelectors();
-    for (const sel of selectors) {
-      if (element.matches(sel)) {
-        this.observeContainer(element);
-        return;
-      }
-      const children = element.querySelectorAll(sel);
-      children.forEach((child) => this.observeContainer(child));
-    }
-  }
-
-  private observeContainer(container: Element): void {
-    if (this.observedContainers.has(container) || this.isEditable(container)) {
-      return;
-    }
-
-    this.observedContainers.add(container);
-
-    const observer = new MutationObserver((mutations) => {
-      if (this.isRestoring) return;
-      this.handleContainerMutations(container, mutations);
-    });
-
-    observer.observe(container, {
-      childList: true,
-      characterData: true,
-      subtree: true,
-    });
-
-    // Initial pass on existing contents
-    this.restoreContainerText(container);
   }
 
   private isEditable(element: Element): boolean {
@@ -135,13 +79,14 @@ export class ContentRestorer {
     if (tag === 'textarea' || tag === 'input') return true;
     if (element.getAttribute('contenteditable') === 'true') return true;
     if ((element as HTMLElement).isContentEditable) return true;
-    if (element.closest && element.closest('textarea, input, [contenteditable="true"]')) {
+    if (element.classList && element.classList.contains('ProseMirror')) return true;
+    if (element.closest && element.closest('textarea, input, [contenteditable="true"], .ProseMirror')) {
       return true;
     }
     return false;
   }
 
-  private handleContainerMutations(container: Element, mutations: MutationRecord[]): void {
+  private handleMutations(mutations: MutationRecord[]): void {
     if (this.cachedMappings.length === 0) {
       this.updateMappings();
       return;
@@ -165,7 +110,7 @@ export class ContentRestorer {
     }
 
     if (needsRestore) {
-      this.restoreContainerText(container);
+      this.scheduleRestore();
     } else if (mightHaveNewPlaceholder) {
       this.updateMappings();
     }
@@ -174,75 +119,81 @@ export class ContentRestorer {
   private hasAnyPlaceholder(text: string): boolean {
     for (const m of this.cachedMappings) {
       if (text.includes(m.placeholder)) return true;
-      // Also check bare placeholder
       const bare = m.placeholder.replace(/^«/, '').replace(/»$/, '');
       if (text.includes(bare)) return true;
     }
     return false;
   }
 
-  private scanAllContainers(): void {
-    if (!this.adapter || this.cachedMappings.length === 0) return;
-    const selectors = this.adapter.getMessageSelectors();
-    for (const sel of selectors) {
-      document.querySelectorAll(sel).forEach((el) => {
-        this.restoreContainerText(el);
-      });
-    }
+  private scheduleRestore(): void {
+    if (this.restoreRequested || this.isRestoring || this.cachedMappings.length === 0) return;
+    this.restoreRequested = true;
+    requestAnimationFrame(() => {
+      this.restoreRequested = false;
+      this.performRestore();
+    });
   }
 
-  /**
-   * Restores text in `container` handling single text nodes, split nodes,
-   * code blocks, and inline code elements.
-   */
-  private restoreContainerText(container: Element): void {
-    if (this.cachedMappings.length === 0 || this.isEditable(container)) {
-      return;
-    }
-
-    const fullText = container.textContent || '';
-    if (!this.hasAnyPlaceholder(fullText)) {
-      return;
-    }
-
+  private performRestore(): void {
     this.isRestoring = true;
-
     try {
-      // Find all leaf text-containing elements (paragraphs, code, spans, list items)
-      const blocks = container.querySelectorAll('p, pre, code, span, li, blockquote, div');
-      const targetElements = blocks.length > 0 ? Array.from(blocks) : [container];
-
-      for (const el of targetElements) {
-        if (this.isEditable(el)) continue;
-
-        // Collect direct text child nodes
-        const textNodes: Text[] = [];
-        for (const child of Array.from(el.childNodes)) {
-          if (child.nodeType === Node.TEXT_NODE && child.nodeValue) {
-            textNodes.push(child as Text);
+      const walker = document.createTreeWalker(
+        document.body || document.documentElement,
+        NodeFilter.SHOW_TEXT,
+        {
+          acceptNode: (node) => {
+            if (node.parentElement && this.isEditable(node.parentElement)) {
+              return NodeFilter.FILTER_REJECT;
+            }
+            return NodeFilter.FILTER_ACCEPT;
           }
         }
+      );
 
-        if (textNodes.length === 0) continue;
+      const textNodes: Text[] = [];
+      let currentNode = walker.nextNode();
+      while (currentNode) {
+        textNodes.push(currentNode as Text);
+        currentNode = walker.nextNode();
+      }
 
-        if (textNodes.length === 1) {
-          const node = textNodes[0];
-          const orig = node.nodeValue || '';
+      const groups: Text[][] = [];
+      let currentGroup: Text[] = [];
+      
+      for (const node of textNodes) {
+        if (currentGroup.length === 0) {
+          currentGroup.push(node);
+        } else {
+          const lastNode = currentGroup[currentGroup.length - 1];
+          if (node.parentNode === lastNode.parentNode && node.previousSibling === lastNode) {
+            currentGroup.push(node);
+          } else {
+            groups.push(currentGroup);
+            currentGroup = [node];
+          }
+        }
+      }
+      if (currentGroup.length > 0) {
+        groups.push(currentGroup);
+      }
+
+      for (const group of groups) {
+        if (group.length === 1) {
+          const orig = group[0].nodeValue || '';
           if (this.hasAnyPlaceholder(orig)) {
             const restored = restore(orig, this.cachedMappings);
             if (restored !== orig) {
-              node.nodeValue = restored;
+              group[0].nodeValue = restored;
             }
           }
         } else {
-          // Multiple adjacent text nodes (handles split streaming tokens across nodes)
-          const combined = textNodes.map((n) => n.nodeValue || '').join('');
+          const combined = group.map(n => n.nodeValue || '').join('');
           if (this.hasAnyPlaceholder(combined)) {
             const restored = restore(combined, this.cachedMappings);
             if (restored !== combined) {
-              textNodes[0].nodeValue = restored;
-              for (let i = 1; i < textNodes.length; i++) {
-                textNodes[i].nodeValue = '';
+              group[0].nodeValue = restored;
+              for (let i = 1; i < group.length; i++) {
+                group[i].nodeValue = '';
               }
             }
           }
@@ -253,3 +204,4 @@ export class ContentRestorer {
     }
   }
 }
+
