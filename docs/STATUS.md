@@ -119,6 +119,11 @@
 | **Extension Background Service Worker** | ~1.5 – 2.5 MB (post-NER load, 526.5 KB compiled Trie) | ~35 – 50 MB | Coordinates detection, manages conversation mappings in `chrome.storage.session`, terminates when idle. |
 | **Total Extension Overhead** | < 5.0 MB V8 Heap | Up to ~50 MB | Fully browser-native MV3; zero background daemon or Python runtime. |
 
+5. **ChatGPT Real-Site Compatibility & Fail-Closed Classification (Fix 5 - Completed):**
+   - Implemented shape-based request classification in `interceptor-main.ts`. Requests with unexpected message shapes fail closed (`unknown-message-shape`).
+   - Replaced guess of `content.parts[0]` structure with strict `null` return for ChatGPT requests to fail closed until real-site trace data confirms the schema.
+   - Diagnosics panel explicitly renders the content-free JSON key structure with string values swapped to their length (`string(15)`) for safe real-site structural debugging.
+
 ---
 
 ## 4. Stage 6: Review-Before-Send Architecture & Verification

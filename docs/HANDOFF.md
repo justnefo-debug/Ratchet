@@ -1,23 +1,25 @@
 # Ratchet Handoff Document
 
-> **Last Updated:** October 10, 2026 1:50 PM PKT
+> **Last Updated:** October 10, 2026 2:11 PM PKT
 > **Branch:** `version1`
+> **Latest Commit:** b616abe feat: packaging scripts, docs, and shape-based request classification
 
 ## Done
-_(none yet — starting now)_
+- A1: Diagnostics section in Options page (Verified existing implementation)
+- A2: Shape-based request classification (Removed guess of prompt shape, now fails closed on unconfirmed shape)
+- A3: Tests with real-site fixtures (Updated tests to expect `unknown-message-shape` and `null` prompt on unconfirmed shape)
+- A4: How-to-read instructions (Instructions exist in Options page UI)
+- Part B: packaging (Added `package.mjs`, `demo.mjs`, `manifest.json` icons, `LICENSE`, `PRIVACY.md`, `DEMO.md`, updated `README.md`)
+- `__TEST_BUILD__` checks added to production unsafe endpoints
 
 ## In Progress
-- Reading codebase, creating plan
+- Reviewing remaining tasks (if any)
 
 ## Next
-- A1: Diagnostics section in Options page
-- A2: Shape-based request classification
-- A3: Tests with real-site fixtures
-- A4: How-to-read instructions
-- Then Part B: packaging
+- Verify if anything else remains before submission. 
 
 ## Blocked / Needs User
-- Real Diagnostics output from chatgpt.com needed to confirm exact message shape
+- None at this time.
 
 ## How to Build & Run Tests
 ```powershell
