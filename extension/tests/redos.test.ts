@@ -43,10 +43,10 @@ describe('Custom Rule ReDoS Validator (validateRegexSafety)', () => {
   it('accepts safe, well-formed regular expressions', () => {
     const safePatterns = [
       'PRJ-[A-Z0-9]{4,8}',
-      '\\bCONFIDENTIAL-[0-9]+\\b',
+      '\\bCONFIDENTIAL-[0-9]{1,50}\\b',
       'USER_[a-f0-9]{16}',
       'ACME_[A-Z]{3}_[0-9]{4}',
-      '\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b',
+      '\\b[A-Za-z0-9._%+-]{1,50}@[A-Za-z0-9.-]{1,50}\\.[A-Za-z]{2,50}\\b',
     ];
 
     for (const pat of safePatterns) {
@@ -90,17 +90,17 @@ describe('Custom Rule ReDoS Validator (validateRegexSafety)', () => {
     for (const pat of dangerousPatterns) {
       const res = validateRegexSafety(pat);
       expect(res.valid, `Expected ReDoS rejection for "${pat}"`).toBe(false);
-      expect(res.error).toMatch(/ReDoS|nested repetition|adjacent overlapping/i);
+      expect(res.error).toMatch(/ReDoS|nested repetition|adjacent overlapping|unbounded/i);
     }
   });
 
   it('asynchronously validates regex patterns without blocking', async () => {
-    const safeRes = await validateRegexSafetyAsync('CONFIDENTIAL-[0-9]+', 300);
+    const safeRes = await validateRegexSafetyAsync('CONFIDENTIAL-[0-9]{1,50}', 300);
     expect(safeRes.valid).toBe(true);
 
     const dangerRes = await validateRegexSafetyAsync('(a+)+$', 300);
     expect(dangerRes.valid).toBe(false);
-    expect(dangerRes.error).toMatch(/ReDoS|nested repetition|timeout/i);
+    expect(dangerRes.error).toMatch(/ReDoS|nested repetition|timeout|unbounded/i);
   });
 });
 
@@ -168,8 +168,8 @@ describe('Custom Rules Runtime Time Guard', () => {
   });
 
   it('terminates and skips a pattern that bypasses naive static checks but causes catastrophic backtracking on specific input', async () => {
-    // Pattern: (b|bb)+$ has no nested quantifiers, but on 30 'b's + '!' it backtracks 2^30 times.
-    const sneakyPattern = '(b|bb)+$';
+    // Pattern: (b|bb){1,500}$ has no nested quantifiers, but on 30 'b's + '!' it backtracks 2^30 times.
+    const sneakyPattern = '(b|bb){1,500}$';
     const adversarialText = 'b'.repeat(30) + '!';
 
     // 1. Verify our updated syntax validator rejects it as an unsafe repeated alternation
@@ -247,11 +247,16 @@ describe('Custom Rules Runtime Time Guard', () => {
     const excessiveBoundPattern = '\\bTOKEN-[a-z]{1,2000}\\b';
     const result = validateRegexSafety(excessiveBoundPattern);
     expect(result.valid).toBe(false);
-    expect(result.error).toContain('exceeds maximum limit of 1000 characters');
+    expect(result.error).toContain('exceeds maximum allowed match length');
 
     const exactBoundPattern = '\\bTOKEN-[a-z]{1,1000}\\b';
     const validResult = validateRegexSafety(exactBoundPattern);
     expect(validResult.valid).toBe(true);
+
+    const combinedBoundPattern = 'A{600}B{500}';
+    const combinedResult = validateRegexSafety(combinedBoundPattern);
+    expect(combinedResult.valid).toBe(false);
+    expect(combinedResult.error).toContain('sum of upper bounds across quantifiers (1100)');
   });
 
   it('successfully detects a match spanning across a chunk boundary (index 10,000) via chunk overlap', () => {

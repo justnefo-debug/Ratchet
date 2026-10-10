@@ -38,23 +38,49 @@ export function validateRegexSafety(pattern: string): ReDoSValidationResult {
     return { valid: false, error: `Invalid regular expression: ${err.message}` };
   }
 
-  // 1b. Check for quantifiers exceeding maximum bound limit (MAX_QUANTIFIER_BOUND)
-  const quantifierMatches = pattern.match(/\{(\d+)(?:,(\d*))?\}/g);
-  if (quantifierMatches) {
-    for (const q of quantifierMatches) {
+  // 1b. Compute maximum possible match length from quantifiers to ensure it doesn't exceed SCAN_CHUNK_OVERLAP
+  const sanitizedForQuantifiers = pattern.replace(/\\./g, '').replace(/\[[^\]]*\]/g, '');
+  
+  if (/[*+]/.test(sanitizedForQuantifiers)) {
+    return {
+      valid: false,
+      error: `Pattern rejected: unbounded quantifiers (* or +) are not allowed as their match length can exceed the chunk overlap`,
+    };
+  }
+
+  let totalQuantifierBound = 0;
+  
+  const optionals = sanitizedForQuantifiers.match(/\?/g);
+  if (optionals) {
+    totalQuantifierBound += optionals.length;
+  }
+
+  const braces = sanitizedForQuantifiers.match(/\{(\d+)(?:,(\d*))?\}/g);
+  if (braces) {
+    for (const q of braces) {
       const inner = q.slice(1, -1);
       const parts = inner.split(',');
-      const upperStr = parts.length > 1 ? parts[1] : parts[0];
-      if (upperStr) {
-        const bound = parseInt(upperStr, 10);
-        if (bound > MAX_QUANTIFIER_BOUND) {
+      if (parts.length === 1) {
+        totalQuantifierBound += parseInt(parts[0], 10);
+      } else {
+        if (parts[1] === '') {
           return {
-            valid: false,
-            error: `Pattern rejected: quantifier bound ${q} exceeds maximum limit of ${MAX_QUANTIFIER_BOUND} characters`,
+             valid: false,
+             error: `Pattern rejected: unbounded quantifiers ({n,}) are not allowed as their match length can exceed the chunk overlap`,
           };
+        } else {
+          totalQuantifierBound += parseInt(parts[1], 10);
         }
       }
     }
+  }
+
+  // 1000 is SCAN_CHUNK_OVERLAP. We hardcode it to avoid circular dependency, but mention it in error
+  if (totalQuantifierBound > 1000) {
+    return {
+      valid: false,
+      error: `Pattern rejected: sum of upper bounds across quantifiers (${totalQuantifierBound}) exceeds maximum allowed match length (SCAN_CHUNK_OVERLAP of 1000)`,
+    };
   }
 
   // 2. Static heuristic check for dangerous nested quantifiers e.g. (a+)+, ([0-9]*)*, (x+)*
