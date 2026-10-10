@@ -1461,6 +1461,78 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
     expect(logStr).toContain('Ratchet: POST /api/other -> redacted (style: fetch string URL)');
     expect(logStr).toContain('Ratchet: POST /api/xhr-path -> redacted (style: XHR)');
   });
+
+  test('23: Real-site DOM shape restoration, URL change, split nodes, and code elements', async () => {
+    const convId = 'temp-real-dom';
+    await page.goto(`http://127.0.0.1:${PORT}/?c=${convId}`);
+    await page.waitForLoadState('networkidle');
+    server.clearLoggedRequests();
+
+    const email = 'real.dom@example.com';
+    const createBody = () => JSON.stringify({
+      messages: [{
+        author: { role: 'user' },
+        content: { parts: [`Check ${email}`] }
+      }]
+    });
+
+    // 1. Fire interceptor to create mapping under temp-real-dom
+    await page.evaluate(async (bodyStr) => {
+      await fetch('/api/f/conversation', { method: 'POST', body: bodyStr });
+    }, createBody());
+
+    await new Promise(r => setTimeout(r, 1000));
+    expect(server.loggedRequests[0].body).toContain('«EMAIL_1»');
+
+    // 2. Simulate URL change (history.pushState) to /c/uuid-5678
+    // This tests the migrateConversationMapping fallback!
+    await page.evaluate(() => {
+      history.pushState({}, '', '/c/uuid-5678');
+      // Trigger focus or mapping update event to ensure new mappings are fetched under new ID
+      window.dispatchEvent(new Event('focus'));
+    });
+    
+    // Wait for mapping update
+    await new Promise(r => setTimeout(r, 500));
+
+    // 3. Simulate the assistant streaming a response with split text nodes and inline code
+    await page.evaluate(() => {
+      // User bubble (split text nodes in same element)
+      const userDiv = document.createElement('div');
+      userDiv.className = 'user-bubble';
+      userDiv.appendChild(document.createTextNode('You said: '));
+      userDiv.appendChild(document.createTextNode('«EM'));
+      userDiv.appendChild(document.createTextNode('AIL_1»'));
+      document.body.appendChild(userDiv);
+
+      // Assistant bubble with inline code
+      const asstDiv = document.createElement('div');
+      asstDiv.className = 'assistant-bubble markdown';
+      asstDiv.innerHTML = `<p>The email is <code>«EMAIL_1»</code>.</p>`;
+      document.body.appendChild(asstDiv);
+
+      // Textarea input (should not be restored)
+      const input = document.createElement('textarea');
+      input.id = 'prompt-textarea-test23';
+      input.value = 'Draft: «EMAIL_1»';
+      document.body.appendChild(input);
+    });
+
+    // Wait for the mutation observer and rAF to do the restoration
+    await new Promise(r => setTimeout(r, 1000));
+
+    // Assert user bubble restored
+    const userText = await page.evaluate(() => document.querySelector('.user-bubble')?.textContent);
+    expect(userText).toContain(email);
+    expect(userText).not.toContain('«EMAIL_1»');
+
+    // Assert assistant bubble restored
+    const asstText = await page.evaluate(() => document.querySelector('.assistant-bubble')?.textContent);
+    expect(asstText).toContain(email);
+    expect(asstText).not.toContain('«EMAIL_1»');
+
+    // Assert input box untouched
+    const inputValue = await page.evaluate(() => (document.querySelector('#prompt-textarea-test23') as HTMLTextAreaElement).value);
+    expect(inputValue).toBe('Draft: «EMAIL_1»');
+  });
 });
-
-
