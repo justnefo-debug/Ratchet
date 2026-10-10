@@ -114,7 +114,7 @@ export function detectWithCustomRules(
       }
 
       try {
-        const re = new RegExp(rule.pattern, 'g');
+        const re = new RegExp(safety.rewrittenPattern || rule.pattern, 'g');
         const seenSpans = new Set<string>();
 
         if (text.length <= SCAN_CHUNK_SIZE) {

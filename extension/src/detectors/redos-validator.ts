@@ -10,6 +10,66 @@ export interface ReDoSValidationResult {
   valid: boolean;
   error?: string;
   executionTimeMs?: number;
+  rewrittenPattern?: string;
+}
+
+export function rewriteUnboundedQuantifiers(pattern: string): string {
+  let result = '';
+  let inCharClass = false;
+  let i = 0;
+  
+  while (i < pattern.length) {
+    const char = pattern[i];
+    
+    if (char === '\\') {
+      result += pattern.substring(i, i + 2);
+      i += 2;
+      continue;
+    }
+    
+    if (char === '[') {
+      inCharClass = true;
+      result += char;
+      i++;
+      continue;
+    }
+    
+    if (char === ']') {
+      inCharClass = false;
+      result += char;
+      i++;
+      continue;
+    }
+    
+    if (!inCharClass) {
+      if (char === '*') {
+        result += '{0,200}';
+        i++;
+        continue;
+      }
+      
+      if (char === '+') {
+        result += '{1,200}';
+        i++;
+        continue;
+      }
+      
+      if (char === '{') {
+        const match = pattern.substring(i).match(/^\{(\d+),\}/);
+        if (match) {
+          const n = parseInt(match[1], 10);
+          result += `{${n},${n + 200}}`;
+          i += match[0].length;
+          continue;
+        }
+      }
+    }
+    
+    result += char;
+    i++;
+  }
+  
+  return result;
 }
 
 export const MAX_REGEX_PATTERN_LENGTH = 200;
@@ -39,47 +99,44 @@ export function validateRegexSafety(pattern: string): ReDoSValidationResult {
   }
 
   // 1b. Compute maximum possible match length from quantifiers to ensure it doesn't exceed SCAN_CHUNK_OVERLAP
-  const sanitizedForQuantifiers = pattern.replace(/\\./g, '').replace(/\[[^\]]*\]/g, '');
+  const rewritten = rewriteUnboundedQuantifiers(pattern);
+  let textForLiterals = rewritten.replace(/\\./g, 'X').replace(/\[[^\]]*\]/g, 'X');
   
-  if (/[*+]/.test(sanitizedForQuantifiers)) {
-    return {
-      valid: false,
-      error: `Pattern rejected: unbounded quantifiers (* or +) are not allowed as their match length can exceed the chunk overlap`,
-    };
-  }
+  let maxMatchLength = 0;
 
-  let totalQuantifierBound = 0;
-  
-  const optionals = sanitizedForQuantifiers.match(/\?/g);
-  if (optionals) {
-    totalQuantifierBound += optionals.length;
-  }
-
-  const braces = sanitizedForQuantifiers.match(/\{(\d+)(?:,(\d*))?\}/g);
+  const braces = textForLiterals.match(/\{(\d+)(?:,(\d*))?\}/g);
   if (braces) {
     for (const q of braces) {
       const inner = q.slice(1, -1);
       const parts = inner.split(',');
       if (parts.length === 1) {
-        totalQuantifierBound += parseInt(parts[0], 10);
+        maxMatchLength += parseInt(parts[0], 10);
       } else {
-        if (parts[1] === '') {
-          return {
-             valid: false,
-             error: `Pattern rejected: unbounded quantifiers ({n,}) are not allowed as their match length can exceed the chunk overlap`,
-          };
-        } else {
-          totalQuantifierBound += parseInt(parts[1], 10);
+        if (parts[1] !== '') {
+          maxMatchLength += parseInt(parts[1], 10);
         }
       }
     }
   }
 
-  // 1000 is SCAN_CHUNK_OVERLAP. We hardcode it to avoid circular dependency, but mention it in error
-  if (totalQuantifierBound > 1000) {
+  // Strip braces and their optional modifiers
+  textForLiterals = textForLiterals.replace(/\{\d+(?:,\d*)?\}\??/g, '');
+  textForLiterals = textForLiterals.replace(/[+*]\??/g, ''); // just in case
+  
+  const optionals = textForLiterals.match(/\?/g);
+  if (optionals) {
+    maxMatchLength += optionals.length;
+  }
+  
+  textForLiterals = textForLiterals.replace(/\?/g, ''); // strip remaining ? modifiers
+  
+  const literals = textForLiterals.replace(/[()|^$]/g, '');
+  maxMatchLength += literals.length;
+
+  if (maxMatchLength > 1000) {
     return {
       valid: false,
-      error: `Pattern rejected: sum of upper bounds across quantifiers (${totalQuantifierBound}) exceeds maximum allowed match length (SCAN_CHUNK_OVERLAP of 1000)`,
+      error: `Pattern rejected: maximum match length after capping (${maxMatchLength}) exceeds SCAN_CHUNK_OVERLAP limit of 1000`,
     };
   }
 
@@ -141,7 +198,7 @@ export function validateRegexSafety(pattern: string): ReDoSValidationResult {
   for (const input of testInputs) {
     const start = performance.now();
     try {
-      const tester = new RegExp(pattern);
+      const tester = new RegExp(rewritten);
       tester.test(input);
       const elapsed = performance.now() - start;
       if (elapsed > maxElapsed) maxElapsed = elapsed;
@@ -158,7 +215,7 @@ export function validateRegexSafety(pattern: string): ReDoSValidationResult {
     }
   }
 
-  return { valid: true, executionTimeMs: maxElapsed };
+  return { valid: true, executionTimeMs: maxElapsed, rewrittenPattern: rewritten };
 }
 
 /**

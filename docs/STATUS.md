@@ -44,7 +44,7 @@
   - Ephemeral session mappings reside in memory-backed `chrome.storage.session` and are purged on browser exit.
   - Optional persistence uses AES-GCM 256-bit keys with `extractable: false` via WebCrypto API.
   - *Threat Model Scope:* WebCrypto prevents scripts from exporting the raw key material and protects local records against casual storage dumps. However, because keys (IndexedDB) and ciphertexts (`chrome.storage.local`) reside in the same browser profile directory, this DOES NOT protect against an attacker with read access to the browser's profile directory on disk, nor against malware with browser process memory inspection capabilities.
-- **Custom-Rule Safety & Input Length Cap:** User-defined regex rules are restricted to a ReDoS-safe linear-time subset (no nested repetition, no overlapping adjacent wildcards, no repeated alternations) and capped at 200 characters to prevent background worker denial of service.
+- **Custom-Rule Safety & Input Length Cap:** User-defined regex rules are restricted to a ReDoS-safe linear-time subset (no nested repetition, no overlapping adjacent wildcards, no repeated alternations) and capped at 200 characters to prevent background worker denial of service. Unbounded repeats (`*`, `+`, `{n,}`) are automatically rewritten at compile time and capped at 200 characters to ensure maximum match lengths cannot exceed the overlapping chunk boundary.
 
 ### 1.6 System Defaults & Configuration Reference
 - **Global Shield:** `enabled = true`

@@ -37,16 +37,42 @@ describe('ReDoS Safety Check', () => {
   }
 });
 
-import { validateRegexSafety, validateRegexSafetyAsync } from '../src/detectors/redos-validator';
+import { validateRegexSafety, validateRegexSafetyAsync, rewriteUnboundedQuantifiers } from '../src/detectors/redos-validator';
+
+describe('rewriteUnboundedQuantifiers', () => {
+  it('rewrites unbounded quantifiers correctly', () => {
+    expect(rewriteUnboundedQuantifiers('a*')).toBe('a{0,200}');
+    expect(rewriteUnboundedQuantifiers('a+')).toBe('a{1,200}');
+    expect(rewriteUnboundedQuantifiers('a{5,}')).toBe('a{5,205}');
+  });
+
+  it('leaves escaped characters intact', () => {
+    expect(rewriteUnboundedQuantifiers('a\\+')).toBe('a\\+');
+    expect(rewriteUnboundedQuantifiers('a\\*')).toBe('a\\*');
+    expect(rewriteUnboundedQuantifiers('a\\{5,\\}')).toBe('a\\{5,\\}');
+  });
+
+  it('leaves character classes intact', () => {
+    expect(rewriteUnboundedQuantifiers('[*+]')).toBe('[*+]');
+    expect(rewriteUnboundedQuantifiers('[a-z+]')).toBe('[a-z+]');
+    expect(rewriteUnboundedQuantifiers('[\\]+]')).toBe('[\\]+]');
+  });
+
+  it('leaves quantifier modifiers intact', () => {
+    expect(rewriteUnboundedQuantifiers('a+?')).toBe('a{1,200}?');
+    expect(rewriteUnboundedQuantifiers('a*?')).toBe('a{0,200}?');
+    expect(rewriteUnboundedQuantifiers('a{5,}?')).toBe('a{5,205}?');
+  });
+});
 
 describe('Custom Rule ReDoS Validator (validateRegexSafety)', () => {
   it('accepts safe, well-formed regular expressions', () => {
     const safePatterns = [
       'PRJ-[A-Z0-9]{4,8}',
-      '\\bCONFIDENTIAL-[0-9]{1,50}\\b',
+      '\\bCONFIDENTIAL-[0-9]+\\b',
       'USER_[a-f0-9]{16}',
       'ACME_[A-Z]{3}_[0-9]{4}',
-      '\\b[A-Za-z0-9._%+-]{1,50}@[A-Za-z0-9.-]{1,50}\\.[A-Za-z]{2,50}\\b',
+      '\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b',
     ];
 
     for (const pat of safePatterns) {
@@ -95,7 +121,7 @@ describe('Custom Rule ReDoS Validator (validateRegexSafety)', () => {
   });
 
   it('asynchronously validates regex patterns without blocking', async () => {
-    const safeRes = await validateRegexSafetyAsync('CONFIDENTIAL-[0-9]{1,50}', 300);
+    const safeRes = await validateRegexSafetyAsync('CONFIDENTIAL-[0-9]+', 300);
     expect(safeRes.valid).toBe(true);
 
     const dangerRes = await validateRegexSafetyAsync('(a+)+$', 300);
@@ -168,8 +194,8 @@ describe('Custom Rules Runtime Time Guard', () => {
   });
 
   it('terminates and skips a pattern that bypasses naive static checks but causes catastrophic backtracking on specific input', async () => {
-    // Pattern: (b|bb){1,500}$ has no nested quantifiers, but on 30 'b's + '!' it backtracks 2^30 times.
-    const sneakyPattern = '(b|bb){1,500}$';
+    // Pattern: (b|bb)+$ has no nested quantifiers, but on 30 'b's + '!' it backtracks 2^30 times.
+    const sneakyPattern = '(b|bb)+$';
     const adversarialText = 'b'.repeat(30) + '!';
 
     // 1. Verify our updated syntax validator rejects it as an unsafe repeated alternation
@@ -247,16 +273,57 @@ describe('Custom Rules Runtime Time Guard', () => {
     const excessiveBoundPattern = '\\bTOKEN-[a-z]{1,2000}\\b';
     const result = validateRegexSafety(excessiveBoundPattern);
     expect(result.valid).toBe(false);
-    expect(result.error).toContain('exceeds maximum allowed match length');
+    expect(result.error).toContain('exceeds SCAN_CHUNK_OVERLAP limit of 1000');
 
-    const exactBoundPattern = '\\bTOKEN-[a-z]{1,1000}\\b';
+    const exactBoundPattern = '\\bTOKEN-[a-z]{1,950}\\b';
     const validResult = validateRegexSafety(exactBoundPattern);
     expect(validResult.valid).toBe(true);
 
     const combinedBoundPattern = 'A{600}B{500}';
     const combinedResult = validateRegexSafety(combinedBoundPattern);
     expect(combinedResult.valid).toBe(false);
-    expect(combinedResult.error).toContain('sum of upper bounds across quantifiers (1100)');
+    expect(combinedResult.error).toContain('SCAN_CHUNK_OVERLAP');
+  });
+
+  it('accepts and correctly caps unbounded quantifiers (*, +, {n,})', () => {
+    const patterns = [
+      '\\d+',
+      'EMP-\\d+',
+      '\\w+@internal\\.corp\\.com',
+      '[A-Z]{2}\\d+',
+      'a*',
+      'b{5,}'
+    ];
+    for (const pat of patterns) {
+      const res = validateRegexSafety(pat);
+      expect(res.valid).toBe(true);
+      expect(res.rewrittenPattern).toBeDefined();
+    }
+  });
+
+  it('detects a 150-char match for a capped \\w+ across a chunk boundary', () => {
+    const token = 'A'.repeat(150);
+    const prefix = 'a'.repeat(9950);
+    const suffix = 'b'.repeat(5000);
+    const promptText = prefix + token + suffix;
+
+    const rule = {
+      id: 'capped-boundary-rule',
+      name: 'Capped Boundary Pattern',
+      category: 'CAPPED',
+      type: 'regex' as const,
+      pattern: 'A+',
+      enabled: true,
+      confidence: 0.95,
+    };
+
+    const res = detectWithCustomRules(promptText, [rule], 50);
+    expect(res.skippedRules.length).toBe(0);
+    // Should match the 'A+' which is now A{1,200}
+    const match = res.find(r => r.value === token);
+    expect(match).toBeDefined();
+    expect(match!.start).toBe(9950);
+    expect(match!.end).toBe(9950 + 150);
   });
 
   it('successfully detects a match spanning across a chunk boundary (index 10,000) via chunk overlap', () => {

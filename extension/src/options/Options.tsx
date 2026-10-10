@@ -32,6 +32,7 @@ const Options: React.FC = () => {
   const [newRuleType, setNewRuleType] = useState<'regex' | 'keyword'>('regex');
   const [newRulePattern, setNewRulePattern] = useState('');
   const [ruleValidationError, setRuleValidationError] = useState<string | null>(null);
+  const [ruleRewrittenPattern, setRuleRewrittenPattern] = useState<string | null>(null);
 
   // Sensitive terms form state
   const [newTermText, setNewTermText] = useState('');
@@ -90,6 +91,7 @@ const Options: React.FC = () => {
   useEffect(() => {
     if (!newRulePattern.trim()) {
       setRuleValidationError(null);
+      setRuleRewrittenPattern(null);
       return;
     }
 
@@ -99,8 +101,10 @@ const Options: React.FC = () => {
         if (!isMounted) return;
         if (!validation.valid) {
           setRuleValidationError(validation.error || 'Invalid regex pattern');
+          setRuleRewrittenPattern(null);
         } else {
           setRuleValidationError(null);
+          setRuleRewrittenPattern(validation.rewrittenPattern || null);
         }
       });
       return () => {
@@ -108,6 +112,7 @@ const Options: React.FC = () => {
       };
     } else {
       setRuleValidationError(null);
+      setRuleRewrittenPattern(null);
     }
   }, [newRulePattern, newRuleType]);
 
@@ -159,6 +164,7 @@ const Options: React.FC = () => {
     setNewRuleCategory('');
     setNewRulePattern('');
     setRuleValidationError(null);
+    setRuleRewrittenPattern(null);
   };
 
   const handleDeleteRule = (id: string) => {
@@ -577,6 +583,11 @@ const Options: React.FC = () => {
                 style={{ color: '#10b981', fontSize: '12px', padding: '2px 4px' }}
               >
                 ✓ Safe regex pattern
+                {ruleRewrittenPattern && ruleRewrittenPattern !== newRulePattern.trim() && (
+                  <div style={{ color: '#f59e0b', marginTop: '4px' }}>
+                    Note: Unbounded repeats are capped at 200 characters. Capped form: <code style={{background: 'rgba(0,0,0,0.2)', padding: '2px 4px', borderRadius: '4px'}}>{ruleRewrittenPattern}</code>
+                  </div>
+                )}
               </div>
             ) : null}
 
