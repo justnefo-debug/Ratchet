@@ -96,8 +96,8 @@ export class MockChatServer {
       return;
     }
 
-    // Chat API endpoint
-    if (url.pathname === '/api/chat' && req.method === 'POST') {
+    // Chat API endpoint (matches any other POST)
+    if (url.pathname !== '/api/test/reset' && req.method === 'POST') {
       let bodyData = '';
       req.on('data', (chunk) => {
         bodyData += chunk.toString();

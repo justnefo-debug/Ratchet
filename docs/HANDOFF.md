@@ -15,6 +15,14 @@
 - **U2: Verify Packaging**: Validated `npm run package` zip output and audited `dist/` network primitives (fetch, XHR, etc.). Fixed `PRIVACY.md` to accurately reflect `powerMode` backend url logic.
 - **U3: README Update**: Documented ChatGPT adapter real-site verification status.
 - **U4: Update HANDOFF.md**: Finalized handoff documentation.
+- **Real-site Interception Fixes**:
+  - `ChatGPTAdapter` now matches request by shape (`messages` array structure), not just URL path.
+  - Added debug lines in MAIN world interceptor (`RATCHET_DEBUG`), tracking paths (scrubbing UUIDs) and call styles (`fetch string URL`, `fetch Request`, `XHR`).
+  - Added support for various `fetch` call styles (string, `Request` object, `Blob` body) and `XHR`.
+  - Added E2E Test 22 to verify unfamiliar paths, call styles, and debug line output.
+
+## Important Note on `RATCHET_DEBUG`
+Before creating the final production package (`npm run package`), `RATCHET_DEBUG` in `extension/src/content/interceptor-main.ts` **must be set to `false`**. This ensures debug lines are disabled by default for users.
 
 ## In Progress
 - Complete! All tasks for submission are done.

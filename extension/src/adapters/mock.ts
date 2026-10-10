@@ -19,15 +19,9 @@ export class MockSiteAdapter implements SiteAdapter {
     }
   }
 
-  matchesRequest(url: string, method?: string): boolean {
+  matchesRequest(_url: string, method?: string): boolean {
     if (method && method.toUpperCase() !== 'POST') return false;
-    try {
-      const base = typeof window !== 'undefined' && window.location ? window.location.origin : 'http://localhost';
-      const parsed = new URL(url, base);
-      return parsed.pathname.includes('/api/chat');
-    } catch {
-      return url.includes('/api/chat');
-    }
+    return true;
   }
 
   getConversationId(pageUrl: string): string | null {

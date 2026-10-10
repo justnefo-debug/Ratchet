@@ -20,15 +20,9 @@ export class ChatGPTAdapter implements SiteAdapter {
     }
   }
 
-  matchesRequest(url: string, method?: string): boolean {
+  matchesRequest(_url: string, method?: string): boolean {
     if (method && method.toUpperCase() !== 'POST') return false;
-    try {
-      const base = typeof window !== 'undefined' && window.location ? window.location.origin : 'https://chatgpt.com';
-      const parsed = new URL(url, base);
-      return parsed.pathname.includes('/backend-api/conversation');
-    } catch {
-      return url.includes('/backend-api/conversation');
-    }
+    return true;
   }
 
   getConversationId(pageUrl: string): string | null {

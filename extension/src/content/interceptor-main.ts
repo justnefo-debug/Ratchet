@@ -14,6 +14,8 @@
  * - Unknown message shape (has messages but unexpected): fail closed
  */
 
+const RATCHET_DEBUG = false;
+
 import { getAdapterForUrl } from '../adapters';
 import type { RequestClassification } from '../adapters/types';
 import { showPrivacyNotice, showWarningNotice } from './ui-notice';
@@ -150,6 +152,10 @@ function runSensitiveTermsScan(text: string): Array<{ type: string; value: strin
     return;
   }
 
+  if (RATCHET_DEBUG) {
+    console.log(`Ratchet: interceptor installed on ${window.location.hostname}`);
+  }
+
   // Request sensitive terms on startup
   requestSensitiveTerms();
 
@@ -168,26 +174,6 @@ function runSensitiveTermsScan(text: string): Array<{ type: string; value: strin
       .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, ':id')
       .replace(/\/[0-9a-f]{24,}/gi, '/:id')
       .replace(/\/\d{10,}/g, '/:id');
-  }
-
-  /** Get content-type from fetch arguments */
-  function getContentType(input: RequestInfo | URL, init?: RequestInit): string {
-    if (input instanceof Request) {
-      return input.headers.get('content-type') || 'unknown';
-    }
-    if (init?.headers) {
-      if (init.headers instanceof Headers) {
-        return init.headers.get('content-type') || 'unknown';
-      }
-      if (Array.isArray(init.headers)) {
-        const h = init.headers.find(x => x[0].toLowerCase() === 'content-type');
-        if (h) return h[1];
-      } else {
-        const hk = Object.keys(init.headers).find(k => k.toLowerCase() === 'content-type');
-        if (hk) return (init.headers as any)[hk];
-      }
-    }
-    return 'unknown';
   }
 
   /** Send a diagnostic entry to the ISOLATED world for storage */
@@ -292,12 +278,20 @@ function runSensitiveTermsScan(text: string): Array<{ type: string; value: strin
     method: string,
     url: string,
     contentType: string,
+    callStyle: string,
   ): Promise<{ action: 'redact'; newBody: string } | { action: 'pass' } | { action: 'block'; reason: string }> {
     // Shape-based classification
     const { classification, extracted } = adapter!.classifyRequest(rawBody);
 
+    const urlObj = (() => {
+      try { return new URL(url, window.location.origin); }
+      catch { return null; }
+    })();
+    const pathForLog = urlObj ? anonymizePath(urlObj.pathname) : url;
+
     if (classification === 'unknown-message-shape') {
       logDiagnostic(method, url, contentType, rawBody, classification, 'blocked', 'Unexpected message shape (fail closed)');
+      if (RATCHET_DEBUG) console.log(`Ratchet: POST ${pathForLog} -> blocked: Unexpected message shape (fail closed) (style: ${callStyle})`);
       return { action: 'block', reason: 'Unexpected message shape (fail closed)' };
     }
 
@@ -321,11 +315,13 @@ function runSensitiveTermsScan(text: string): Array<{ type: string; value: strin
         } else {
           showPrivacyNotice('Ratchet: Outgoing request blocked (redaction failed or timed out).');
         }
+        if (RATCHET_DEBUG) console.log(`Ratchet: POST ${pathForLog} -> blocked: ${msg} (style: ${callStyle})`);
         return { action: 'block', reason: msg };
       }
 
       const newBody = extracted.replaceWith(redactedText);
       logDiagnostic(method, url, contentType, rawBody, classification, 'redacted');
+      if (RATCHET_DEBUG) console.log(`Ratchet: POST ${pathForLog} -> redacted (style: ${callStyle})`);
       return { action: 'redact', newBody };
     }
 
@@ -348,11 +344,13 @@ function runSensitiveTermsScan(text: string): Array<{ type: string; value: strin
       const hitTypes = [...new Set(allHits.map(h => h.type))].join(', ');
       const reason = `Possible sensitive data in unrecognized request (${hitTypes})`;
       logDiagnostic(method, url, contentType, rawBody, classification, 'blocked', reason);
+      if (RATCHET_DEBUG) console.log(`Ratchet: POST ${pathForLog} -> blocked: ${reason} (style: ${callStyle})`);
       return { action: 'block', reason };
     }
 
     // Clean non-message request — pass through
     logDiagnostic(method, url, contentType, rawBody, classification, 'passed-through');
+    if (RATCHET_DEBUG) console.log(`Ratchet: POST ${pathForLog} -> passed through (style: ${callStyle})`);
     return { action: 'pass' };
   }
 
@@ -378,15 +376,28 @@ function runSensitiveTermsScan(text: string): Array<{ type: string; value: strin
       return originalFetch.apply(this, arguments as any);
     }
 
-    let rawBody: string | null = null;
-    if (init && typeof init.body === 'string') {
-      rawBody = init.body;
+    let callStyle = '';
+    if (typeof input === 'string') {
+      callStyle = 'fetch string URL';
+    } else if (input instanceof URL) {
+      callStyle = 'fetch string URL';
     } else if (input instanceof Request) {
-      try {
-        rawBody = await input.clone().text();
-      } catch {
-        rawBody = null;
-      }
+      callStyle = 'fetch with a Request object';
+    }
+
+    let req: Request;
+    try {
+      req = new Request(input, init);
+    } catch {
+      showPrivacyNotice('Ratchet: Outgoing request blocked (unreadable payload).');
+      throw new Error('[Ratchet] Outgoing request blocked (unreadable payload)');
+    }
+
+    let rawBody: string | null = null;
+    try {
+      rawBody = await req.clone().text();
+    } catch {
+      rawBody = null;
     }
 
     if (!rawBody) {
@@ -394,8 +405,8 @@ function runSensitiveTermsScan(text: string): Array<{ type: string; value: strin
       throw new Error('[Ratchet] Outgoing request blocked (unreadable payload)');
     }
 
-    const contentType = getContentType(input, init);
-    const result = await processRequest(rawBody, method, url, contentType);
+    const contentType = req.headers.get('content-type') || 'unknown';
+    const result = await processRequest(rawBody, method, url, contentType, callStyle);
 
     if (result.action === 'block') {
       showPrivacyNotice(`Ratchet: Outgoing request blocked (${result.reason}).`);
@@ -403,19 +414,11 @@ function runSensitiveTermsScan(text: string): Array<{ type: string; value: strin
     }
 
     if (result.action === 'redact') {
-      if (init) {
-        init = { ...init, body: result.newBody };
-        return originalFetch.call(this, input, init);
-      } else if (input instanceof Request) {
-        const newReq = new Request(input, { body: result.newBody });
-        return originalFetch.call(this, newReq);
-      } else {
-        return originalFetch.call(this, input, { body: result.newBody, method: 'POST' });
-      }
+      return originalFetch.call(this, new Request(req, { body: result.newBody }));
     }
 
     // action === 'pass' — pass through untouched
-    return originalFetch.apply(this, arguments as any);
+    return originalFetch.call(this, req);
   };
 
   // ─── 2. Wrap XMLHttpRequest ──────────────────────────────────────
@@ -448,8 +451,9 @@ function runSensitiveTermsScan(text: string): Array<{ type: string; value: strin
     }
 
     const contentType = 'unknown (XHR)';
+    const callStyle = 'XHR';
 
-    processRequest(body, method, url, contentType)
+    processRequest(body, method, url, contentType, callStyle)
       .then((result) => {
         if (result.action === 'block') {
           showPrivacyNotice(`Ratchet: Outgoing request blocked (${result.reason}).`);

@@ -35,7 +35,7 @@ describe('ChatGPTAdapter', () => {
     expect(adapter.matchesRequest('https://chatgpt.com/backend-api/conversation', 'POST')).toBe(true);
     expect(adapter.matchesRequest('/backend-api/conversation', 'POST')).toBe(true);
     expect(adapter.matchesRequest('/backend-api/conversation', 'GET')).toBe(false);
-    expect(adapter.matchesRequest('/backend-api/models', 'POST')).toBe(false);
+    expect(adapter.matchesRequest('/backend-api/models', 'POST')).toBe(true);
   });
 
   it('extracts conversation ID from URL', () => {

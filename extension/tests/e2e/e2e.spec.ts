@@ -1404,6 +1404,63 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
 
     await client.detach();
   });
+
+  test('22: Unfamiliar paths and call styles are handled correctly and debug lines appear', async () => {
+    const convId = 'conv-call-styles';
+    
+    // Start listening BEFORE goto so we catch 'interceptor installed'
+    const consoleLogs: string[] = [];
+    page.on('console', msg => consoleLogs.push(msg.text()));
+
+    await page.goto(`http://127.0.0.1:${PORT}/?c=${convId}`);
+    await page.waitForLoadState('networkidle');
+    server.clearLoggedRequests();
+
+    const email = 'secret.email@test.com';
+    const createBody = () => JSON.stringify({
+      messages: [{
+        author: { role: 'user' },
+        content: { parts: [`My email is ${email}. Say hi.`] }
+      }]
+    });
+
+    await page.evaluate(async (bodyStr) => {
+      // 1. fetch(url, {body: string}) at /api/anything/UUID
+      await fetch('/api/anything/12345678-1234-1234-1234-1234567890ab', { method: 'POST', body: bodyStr });
+      
+      // 2. fetch(new Request(...)) at /api/f/conversation
+      const req = new Request('/api/f/conversation', { method: 'POST', body: bodyStr });
+      await fetch(req);
+      
+      // 3. fetch with Blob body at /api/other
+      const blob = new Blob([bodyStr], { type: 'application/json' });
+      await fetch('/api/other', { method: 'POST', body: blob });
+      
+      // 4. XHR at /api/xhr-path
+      await new Promise<void>((resolve) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/xhr-path');
+        xhr.onload = () => resolve();
+        xhr.send(bodyStr);
+      });
+    }, createBody());
+
+    // Wait a bit for requests to hit server
+    await new Promise(r => setTimeout(r, 1000));
+
+    expect(server.loggedRequests.length).toBe(4);
+    for (const req of server.loggedRequests) {
+      expect(req.body).toContain('«EMAIL_1»');
+      expect(req.body).not.toContain(email);
+    }
+
+    const logStr = consoleLogs.join('\n');
+    expect(logStr).toContain('Ratchet: interceptor installed');
+    expect(logStr).toContain('Ratchet: POST /api/anything/:id -> redacted (style: fetch string URL)');
+    expect(logStr).toContain('Ratchet: POST /api/f/conversation -> redacted (style: fetch with a Request object)');
+    expect(logStr).toContain('Ratchet: POST /api/other -> redacted (style: fetch string URL)');
+    expect(logStr).toContain('Ratchet: POST /api/xhr-path -> redacted (style: XHR)');
+  });
 });
 
 
