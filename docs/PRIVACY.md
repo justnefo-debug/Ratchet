@@ -2,11 +2,11 @@
 
 Ratchet Privacy Shield is a completely local, client-side browser extension designed to protect your privacy. 
 
-## No Network Calls
-Ratchet makes **zero network calls of its own**. 
+## No Network Calls by Default
+Ratchet makes **zero network calls of its own by default**. 
 - It does not "phone home" for telemetry, analytics, or updates.
-- It does not send your data to any external API for processing.
-- The named entity recognition (NER) and all structured data detection run 100% offline using a bundled, offline Radix-Trie and WebAssembly/JS regex engines.
+- By default, the named entity recognition (NER) and all structured data detection run 100% offline using a bundled, offline Radix-Trie and WebAssembly/JS regex engines.
+- **Optional Power Mode**: If you explicitly enable "Power Mode" in the Options and provide a custom Backend URL, Ratchet will send your prompts to that specific URL for advanced processing. This is entirely opt-in.
 
 ## How It Works
 Ratchet intercepts outgoing network requests (specifically, the messages you send to supported AI chatbots like ChatGPT and Claude) directly within your browser. It redacts sensitive information (like names, emails, and credit cards) and replaces them with placeholders (e.g., `«PERSON_1»`) *before* the request leaves your machine. 
