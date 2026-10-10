@@ -48,11 +48,57 @@ export class ChatGPTAdapter implements SiteAdapter {
       if (!body || typeof body !== 'object' || !Array.isArray(body.messages)) {
         return null;
       }
-      // We do not guess the shape of messages[].content.
-      // Since it's not confirmed, we cannot extract the prompt.
-      // This will cause classifyRequest to return 'unknown-message-shape' and fail closed,
-      // which is expected until real-site diagnostics are reviewed.
-      return null;
+      let foundUserMessage = false;
+
+      for (const m of body.messages) {
+        if (m?.author?.role === 'user') {
+          foundUserMessage = true;
+          if (!m.content || !Array.isArray(m.content.parts)) {
+            return null; // user message lacks content.parts array
+          }
+        }
+      }
+
+      if (!foundUserMessage) {
+        return null;
+      }
+
+      const stringParts: { msgIndex: number; partIndex: number; text: string }[] = [];
+      for (let i = 0; i < body.messages.length; i++) {
+        const m = body.messages[i];
+        if (m?.author?.role === 'user') {
+          for (let j = 0; j < m.content.parts.length; j++) {
+            if (typeof m.content.parts[j] === 'string') {
+              stringParts.push({ msgIndex: i, partIndex: j, text: m.content.parts[j] });
+            }
+          }
+        }
+      }
+
+      if (stringParts.length === 0) {
+        return null;
+      }
+
+      const joinedPrompt = stringParts.map(sp => sp.text).join('\n\n');
+
+      return {
+        prompt: joinedPrompt,
+        replaceWith: (redactedPrompt: string) => {
+          const newBody = JSON.parse(bodyString);
+          if (stringParts.length === 1) {
+            const sp = stringParts[0];
+            newBody.messages[sp.msgIndex].content.parts[sp.partIndex] = redactedPrompt;
+          } else {
+            const first = stringParts[0];
+            newBody.messages[first.msgIndex].content.parts[first.partIndex] = redactedPrompt;
+            for (let i = 1; i < stringParts.length; i++) {
+              const sp = stringParts[i];
+              newBody.messages[sp.msgIndex].content.parts[sp.partIndex] = '';
+            }
+          }
+          return JSON.stringify(newBody);
+        }
+      };
     } catch {
       return null;
     }

@@ -116,7 +116,11 @@ export class MockChatServer {
         let prompt = '';
         try {
           const parsed = JSON.parse(bodyData);
-          prompt = parsed.prompt || parsed.message || '';
+          if (parsed.messages && parsed.messages[0]?.content?.parts) {
+            prompt = parsed.messages[0].content.parts.filter((p: any) => typeof p === 'string').join('\n') || '';
+          } else {
+            prompt = parsed.prompt || parsed.message || '';
+          }
         } catch {
           prompt = bodyData;
         }
@@ -235,7 +239,38 @@ export class MockChatServer {
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: promptText, conversationId: convId })
+          body: JSON.stringify({
+            turn_attribution: { turn_trigger: "composer" },
+            action: "next",
+            is_do_not_remember: false,
+            model: "auto",
+            parent_message_id: "client-created-root",
+            timezone: "Asia/Karachi",
+            timezone_offset_min: -300,
+            client_contextual_info: {
+              app_name: "chatgpt.com",
+              app_surface: "codex_browser",
+              has_web_push_capabilities: true,
+              web_push_notification_permission: "default"
+            },
+            local_function_names: ["local.continue_in_work"],
+            messages: [{
+              author: { metadata: {}, name: null, role: "user" },
+              channel: null,
+              content: { content_type: "text", parts: [promptText] },
+              create_time: 1791624096.608,
+              end_turn: null,
+              id: "XXX",
+              metadata: {},
+              recipient: "all",
+              status: "finished_successfully",
+              update_time: null,
+              weight: 1
+            }],
+            supported_encodings: ["v1"],
+            genui_state_snapshots: [],
+            client_prepare_state: "success"
+          })
         });
 
         if (!response.ok) {

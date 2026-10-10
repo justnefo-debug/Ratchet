@@ -43,8 +43,8 @@ describe('ChatGPTAdapter', () => {
     expect(adapter.getConversationId('https://chatgpt.com/')).toBe(null);
   });
 
-  it('handles normal single-turn request body (fails closed since shape is unconfirmed)', () => {
-    // Assumption: Standard ChatGPT web conversation payload
+  it('handles standard ChatGPT backend-api/conversation payload and preserves metadata', () => {
+    // Assumption: Common ChatGPT web client POST shape
     const fixture = {
       action: 'next',
       messages: [
@@ -70,10 +70,16 @@ describe('ChatGPTAdapter', () => {
     const rawString = JSON.stringify(fixture);
     const extracted = adapter.extractUserPrompt(rawString);
 
-    expect(extracted).toBeNull();
+    expect(extracted).not.toBeNull();
+    expect(extracted?.prompt).toBe('Please audit my email alice.doe@example.com for breaches.');
+
+    const updated = JSON.parse(extracted!.replaceWith('Please audit my email «EMAIL_1» for breaches.'));
+    expect(updated.messages[0].content.parts[0]).toBe('Please audit my email «EMAIL_1» for breaches.');
+    expect(updated.model).toBe('gpt-4o');
+    expect(updated.timezone_offset_min).toBe(-300);
   });
 
-  it('handles multi-turn conversation body (fails closed since shape unconfirmed)', () => {
+  it('handles multi-turn conversation body', () => {
     // Assumption: Multi-turn history included in the client request
     const fixture = {
       action: 'next',
@@ -98,7 +104,13 @@ describe('ChatGPTAdapter', () => {
     };
 
     const extracted = adapter.extractUserPrompt(JSON.stringify(fixture));
-    expect(extracted).toBeNull();
+    expect(extracted).not.toBeNull();
+    expect(extracted?.prompt).toBe('Turn 1 prompt\n\nTurn 3 new user prompt with phone 555-0199');
+
+    const updated = JSON.parse(extracted!.replaceWith('Turn 1 prompt\n\nTurn 3 new user prompt with phone «PHONE_1»'));
+    expect(updated.messages[0].content.parts[0]).toBe('Turn 1 prompt\n\nTurn 3 new user prompt with phone «PHONE_1»');
+    expect(updated.messages[1].content.parts[0]).toBe('Turn 1 assistant answer');
+    expect(updated.messages[2].content.parts[0]).toBe('');
   });
 
   it('fails closed (returns null) on unexpected or malformed body shapes', () => {

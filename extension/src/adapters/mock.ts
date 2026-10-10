@@ -47,44 +47,73 @@ export class MockSiteAdapter implements SiteAdapter {
       const body = JSON.parse(bodyString);
       if (!body || typeof body !== 'object') return null;
 
-      if (typeof body.prompt === 'string') {
-        const originalPrompt = body.prompt;
-        return {
-          prompt: originalPrompt,
-          replaceWith: (redactedPrompt: string) => {
-            const updated = JSON.parse(bodyString);
-            updated.prompt = redactedPrompt;
-            return JSON.stringify(updated);
-          },
-        };
+      let foundUserMessage = false;
+
+      for (const m of body.messages) {
+        if (m?.author?.role === 'user') {
+          foundUserMessage = true;
+          if (!m.content || !Array.isArray(m.content.parts)) {
+            return null;
+          }
+        }
       }
 
-      if (typeof body.message === 'string') {
-        const originalPrompt = body.message;
-        return {
-          prompt: originalPrompt,
-          replaceWith: (redactedPrompt: string) => {
-            const updated = JSON.parse(bodyString);
-            updated.message = redactedPrompt;
-            return JSON.stringify(updated);
-          },
-        };
+      if (!foundUserMessage) {
+        return null;
       }
 
-      return null;
+      const stringParts: { msgIndex: number; partIndex: number; text: string }[] = [];
+      for (let i = 0; i < body.messages.length; i++) {
+        const m = body.messages[i];
+        if (m?.author?.role === 'user') {
+          for (let j = 0; j < m.content.parts.length; j++) {
+            if (typeof m.content.parts[j] === 'string') {
+              stringParts.push({ msgIndex: i, partIndex: j, text: m.content.parts[j] });
+            }
+          }
+        }
+      }
+
+      if (stringParts.length === 0) {
+        return null;
+      }
+
+      const joinedPrompt = stringParts.map(sp => sp.text).join('\n\n');
+
+      return {
+        prompt: joinedPrompt,
+        replaceWith: (redactedPrompt: string) => {
+          const newBody = JSON.parse(bodyString);
+          if (stringParts.length === 1) {
+            const sp = stringParts[0];
+            newBody.messages[sp.msgIndex].content.parts[sp.partIndex] = redactedPrompt;
+          } else {
+            const first = stringParts[0];
+            newBody.messages[first.msgIndex].content.parts[first.partIndex] = redactedPrompt;
+            for (let i = 1; i < stringParts.length; i++) {
+              const sp = stringParts[i];
+              newBody.messages[sp.msgIndex].content.parts[sp.partIndex] = '';
+            }
+          }
+          return JSON.stringify(newBody);
+        }
+      };
     } catch {
       return null;
     }
   }
 
   classifyRequest(bodyString: string): { classification: RequestClassification; extracted: ExtractedPrompt | null } {
-    const extracted = this.extractUserPrompt(bodyString);
-    if (extracted) {
-      return { classification: 'message', extracted };
-    }
     try {
       const body = JSON.parse(bodyString);
-      if (body && typeof body === 'object' && ('prompt' in body || 'message' in body)) {
+      if (body && typeof body === 'object' && 'messages' in body) {
+        if (!Array.isArray(body.messages)) {
+          return { classification: 'unknown-message-shape', extracted: null };
+        }
+        const extracted = this.extractUserPrompt(bodyString);
+        if (extracted) {
+          return { classification: 'message', extracted };
+        }
         return { classification: 'unknown-message-shape', extracted: null };
       }
     } catch {}

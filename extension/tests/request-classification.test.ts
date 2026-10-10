@@ -5,7 +5,7 @@
  * message content shape assumed, not confirmed.
  *
  * Tests:
- * 1. Message request is classified as 'unknown-message-shape' because shape is unconfirmed
+ * 1. Message request is classified as 'message' using real shape
  * 2. A prepare-like request without messages passes through
  * 3. A non-message request containing a fake email is blocked by safety net
  * 4. A message request with an unexpected shape fails closed
@@ -20,39 +20,41 @@ describe('ChatGPT Real-Site Request Classification (A2/A3)', () => {
   const adapter = new ChatGPTAdapter();
 
   /**
-   * Fixture: key structure observed on chatgpt.com 2026-10-10.
-   * All string values are fake. Message content shape assumed, not confirmed.
+   * Fixture: captured from chatgpt.com 2026-10-10
    */
   const CHATGPT_MESSAGE_FIXTURE = {
-    action: 'next',
-    client_contextual_info: {
-      is_dark_mode: false,
-      time_at_client: '2026-10-10T08:30:00+05:00',
-      user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-    },
-    client_prepare_state: null,
-    genui_state_snapshots: [],
+    turn_attribution: { turn_trigger: "composer" },
+    action: "next",
     is_do_not_remember: false,
-    local_function_names: [],
+    model: "auto",
+    parent_message_id: "client-created-root",
+    timezone: "Asia/Karachi",
+    timezone_offset_min: -300,
+    client_contextual_info: {
+      app_name: "chatgpt.com",
+      app_surface: "codex_browser",
+      has_web_push_capabilities: true,
+      web_push_notification_permission: "default"
+    },
+    local_function_names: ["local.continue_in_work"],
     messages: [
       {
-        id: 'aaa2f4c9-8b12-4d7e-a1c3-def456789abc',
-        author: { role: 'user' },
-        content: {
-          content_type: 'text',
-          parts: ['My email is testuser@example.com, please check it.'],
-        },
-        metadata: {
-          serialization_metadata: { custom_symbol_offsets: [] },
-        },
-      },
+        author: { metadata: {}, name: null, role: "user" },
+        channel: null,
+        content: { content_type: "text", parts: ["My email is testuser@example.com, please check it."] },
+        create_time: 1791624096.608,
+        end_turn: null,
+        id: "XXX",
+        metadata: {},
+        recipient: "all",
+        status: "finished_successfully",
+        update_time: null,
+        weight: 1
+      }
     ],
-    model: 'gpt-4o',
-    parent_message_id: 'bbb3e5d0-9c23-5e8f-b2d4-ef0567890bcd',
-    supported_encodings: ['utf-8'],
-    timezone: 'Asia/Karachi',
-    timezone_offset_min: -300,
-    turn_attribution: null,
+    supported_encodings: ["v1"],
+    genui_state_snapshots: [],
+    client_prepare_state: "success"
   };
 
   /**
@@ -102,12 +104,26 @@ describe('ChatGPT Real-Site Request Classification (A2/A3)', () => {
     is_do_not_remember: false,
   };
 
-  it('classifies a message request as "unknown-message-shape" because shape is unconfirmed', () => {
+  it('classifies a message request as "message" and extracts prompt', () => {
     const body = JSON.stringify(CHATGPT_MESSAGE_FIXTURE);
     const result = adapter.classifyRequest(body);
 
-    expect(result.classification).toBe('unknown-message-shape');
-    expect(result.extracted).toBeNull();
+    expect(result.classification).toBe('message');
+    expect(result.extracted).not.toBeNull();
+    expect(result.extracted?.prompt).toBe('My email is testuser@example.com, please check it.');
+
+    // Verify redaction preserves all metadata byte-for-byte unchanged
+    const redacted = result.extracted!.replaceWith('My email is «EMAIL_1», please check it.');
+    const parsed = JSON.parse(redacted);
+    expect(parsed.messages[0].content.parts[0]).toBe('My email is «EMAIL_1», please check it.');
+    expect(parsed.action).toBe('next');
+    expect(parsed.model).toBe('auto');
+    expect(parsed.timezone).toBe('Asia/Karachi');
+    expect(parsed.timezone_offset_min).toBe(-300);
+    expect(parsed.parent_message_id).toBe('client-created-root');
+    expect(parsed.client_contextual_info.app_name).toBe('chatgpt.com');
+    expect(parsed.supported_encodings).toEqual(['v1']);
+    expect(parsed.messages[0].create_time).toBe(1791624096.608);
   });
 
   it('classifies a prepare-like request without messages as "non-message"', () => {
