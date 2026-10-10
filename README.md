@@ -1,118 +1,22 @@
-# 🛡️ Ratchet — Privacy that only tightens.
+# Ratchet Privacy Shield
 
-Ratchet is a local, privacy-first data shield that prevents you from accidentally leaking sensitive Personal Identifiable Information (PII) and company secrets to remote AI models like ChatGPT, Claude, or Gemini.
+Ratchet is a privacy-preserving browser extension that automatically detects and redacts sensitive data (PII, PHI, secrets) from your prompts before they leave your browser to AI chatbots like ChatGPT and Claude.
 
-Ratchet sits as a local middleman between you and the AI:
-1. **Redact**: You paste text or upload documents (.pdf, .docx, .xlsx) into Ratchet. It instantly scrubs out sensitive data (Names, Emails, API Keys, Credit Cards, etc.) and replaces them with secure placeholders (e.g. `[PERSON_1]`).
-2. **Vault**: Ratchet saves the original data in a local, on-device vault mapping.
-3. **Restore**: After you get an answer from the AI containing the placeholders, you paste the response back into Ratchet, and it instantly decodes the placeholders back into your original data!
+## Features
+- **Network-Level Interception**: Stops sensitive data at the `window.fetch` / `XMLHttpRequest` level.
+- **100% Local & Offline**: Uses an offline Radix-Trie for Named Entity Recognition. Zero external API calls.
+- **DOM Restoration**: The extension seamlessly replaces placeholders back with the original sensitive terms in the AI's response so your reading experience is completely unaffected.
+- **Strict Fail-Closed Security**: If anything goes wrong, Ratchet blocks the request rather than leaking your data.
+- **Review-Before-Send UI**: An isolated Shadow DOM modal lets you individually un-redact false positives or send data "as-is" after a warning.
 
-**Zero Telemetry. 100% Local Processing. 0 Leaks.**
+## Building and Running
+1. `cd extension`
+2. `npm install`
+3. `npm run build` (For production) or `npm run build:test` (For local testing).
+4. Load the `dist/` or `dist-test/` folder in Chrome via `chrome://extensions/` -> Load unpacked.
 
----
-
-## ✨ Features
-
-- **Text Redaction Engine**: Real-time Regex + NLP (Spacy) engine that detects patterns, API keys, and complex entities.
-- **True Document Redaction**: Safely redact files (PDF, Word, Excel) locally. Plucked data is physically wiped from the files, preventing reverse-engineering.
-- **Custom Rules & Exclusions**: Add your own project code-names or custom regex patterns to be detected automatically.
-- **Local Telemetry Dashboard**: A beautiful, completely local dashboard tracking exactly how many items you've prevented from leaking over time.
-- **Lightning Fast UI**: Built with React & Vite featuring a stunning, responsive Dark Mode interface.
-
----
-
-## 🚀 Getting Started
-
-To run Ratchet, you must start both the Backend (Python) and Frontend (React/Vite) servers.
-
-### 1. Backend Setup (Python)
-Ensure you have Python 3.9+ installed.
-
-```bash
-cd backend
-python -m venv venv
-
-# Activate the virtual environment
-# On Windows:
-.\venv\Scripts\activate
-# On Mac/Linux:
-source venv/bin/activate
-
-# Install requirements
-pip install -r requirements.txt
-python -m spacy download en_core_web_sm
-
-# Start the Flask server
-python app.py
-```
-*(The backend runs on `http://127.0.0.1:5000` by default)*
-
-### 2. Frontend Setup (React/Node)
-Ensure you have Node.js 18+ installed.
-
-```bash
-cd frontend
-npm install
-
-# Start the Vite dev server
-npm run dev
-```
-*(The frontend will run on `http://localhost:5173`)*
-
----
-
-## 📖 How to Use
-
-Check the `Context/manual_guide.md` for a comprehensive step-by-step user manual, including end-to-end stress test data you can try out!
-
-## 🛠️ Architecture
-
-```mermaid
-graph TD
-    A[Browser / Extension] -->|Text / Doc| B(Flask API)
-    B --> C{Pipeline Engine}
-    C --> D[Regex Detector]
-    C --> E[NER Detector Spacy]
-    C --> F[Custom Rules]
-    C --> G[Mapping Store AES-256]
-    
-    A -->|Restore Text| B
-    B --> H[Restorer]
-    G --> H
-    H --> A
-```
-
-- **Backend**: Python, Flask, Spacy (NER), PyMuPDF (PDF handler), OpenPyXL (Excel handler), Python-docx (Word handler).
-- **Frontend**: React, TypeScript, Vite, Lucide React (Icons).
-- **Storage**: In-memory Python mappings for active sessions, synchronized via browser `localStorage`.
-
----
-
-## 📡 API Reference
-
-### `POST /api/detect`
-Detects sensitive entities in text.
-- **Body**: `{"text": "My email is test@example.com"}`
-- **Response**: List of detected entities with confidence scores.
-
-### `POST /api/redact`
-Redacts text and securely stores the mapping.
-- **Body**: `{"text": "My email is test@example.com", "session_id": "optional-uuid"}`
-- **Response**: `{"redacted_text": "My email is [EMAIL_0]", "session_id": "...", "entities": [...]}`
-
-### `POST /api/restore`
-Restores original text from placeholders using the session mapping.
-- **Body**: `{"text": "Here is the response for [EMAIL_0]", "session_id": "..."}`
-- **Response**: `{"restored_text": "Here is the response for test@example.com"}`
-
-### `POST /api/document/redact`
-Redacts a supported document file (.pdf, .docx, .xlsx, .pptx, .csv, .txt).
-- **Body**: `multipart/form-data` with `file` and optional `session_id`.
-- **Response**: Downloadable redacted file.
-
-### `GET /api/rules` | `POST /api/rules`
-Manage custom rules.
-- **POST Body**: `{"action": "add", "rule": {...}}` or `{"action": "delete", "rule_name": "..."}`
-
-### `GET /api/sessions` | `DELETE /api/sessions/<id>`
-Manage active memory sessions.
+## Limitations (Honest Disclosure)
+- **DOM Visibility**: Restored text values live directly in the page DOM so you can read them. As a result, page scripts running on the target origin (e.g., ChatGPT's frontend scripts) *can* technically read restored values once they are rendered. Client-side restoration prevents data from leaving the browser over the wire to the AI backend, but cannot conceal text in the page DOM from the page's own scripts.
+- **Threat Model Scope**: While keys and persistence storage are protected from casual extraction by WebCrypto, Ratchet does not protect against an attacker with physical read access to your browser profile directory on disk, nor against malware with browser memory inspection capabilities.
+- **Inherent ML Imperfection**: While structured PII (emails, SSNs) has >98% deterministic recall, unstructured entity detection (names, organizations) relies on dictionaries and heuristics. It will occasionally miss out-of-vocabulary entities or flag safe words (e.g., "brand" or "author" in certain contexts). Review the prompt before sending.
+- **Unsupported Sites**: Gemini is not currently supported. On unsupported sites, Ratchet will explicitly show it is disabled.

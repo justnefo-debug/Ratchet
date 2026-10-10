@@ -183,7 +183,7 @@ export function isSiteEnabled(siteOrigin: string, enabledSites: Record<string, b
     // Gemini adapter is not implemented yet; a site without an adapter must never look protected
     return false;
   }
-  if (lower.includes('localhost') || lower.includes('127.0.0.1')) {
+  if (typeof __TEST_BUILD__ !== 'undefined' && __TEST_BUILD__ && (lower.includes('localhost') || lower.includes('127.0.0.1'))) {
     return enabledSites.mock !== false;
   }
   return true;

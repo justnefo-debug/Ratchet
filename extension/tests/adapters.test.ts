@@ -43,7 +43,7 @@ describe('ChatGPTAdapter', () => {
     expect(adapter.getConversationId('https://chatgpt.com/')).toBe(null);
   });
 
-  it('handles normal single-turn request body and preserves metadata', () => {
+  it('handles normal single-turn request body (fails closed since shape is unconfirmed)', () => {
     // Assumption: Standard ChatGPT web conversation payload
     const fixture = {
       action: 'next',
@@ -70,28 +70,10 @@ describe('ChatGPTAdapter', () => {
     const rawString = JSON.stringify(fixture);
     const extracted = adapter.extractUserPrompt(rawString);
 
-    expect(extracted).not.toBeNull();
-    expect(extracted?.prompt).toBe('Please audit my email alice.doe@example.com for breaches.');
-
-    // Redaction replacement
-    const redactedText = 'Please audit my email «EMAIL_1» for breaches.';
-    const updatedString = extracted?.replaceWith(redactedText);
-    const updatedObj = JSON.parse(updatedString!);
-
-    // Prompt is replaced
-    expect(updatedObj.messages[0].content.parts[0]).toBe(redactedText);
-
-    // CRITICAL: IDs, models, and metadata must stay completely untouched
-    expect(updatedObj.messages[0].id).toBe('client-generated-uuid-1');
-    expect(updatedObj.messages[0].author.role).toBe('user');
-    expect(updatedObj.model).toBe('gpt-4o');
-    expect(updatedObj.action).toBe('next');
-    expect(updatedObj.parent_message_id).toBe('parent-root-uuid');
-    expect(updatedObj.timezone_offset_min).toBe(-300);
-    expect(updatedObj.history_and_training_disabled).toBe(false);
+    expect(extracted).toBeNull();
   });
 
-  it('handles multi-turn conversation body (targets last user prompt)', () => {
+  it('handles multi-turn conversation body (fails closed since shape unconfirmed)', () => {
     // Assumption: Multi-turn history included in the client request
     const fixture = {
       action: 'next',
@@ -116,13 +98,7 @@ describe('ChatGPTAdapter', () => {
     };
 
     const extracted = adapter.extractUserPrompt(JSON.stringify(fixture));
-    expect(extracted).not.toBeNull();
-    expect(extracted?.prompt).toBe('Turn 3 new user prompt with phone 555-0199');
-
-    const updated = JSON.parse(extracted!.replaceWith('Turn 3 with «PHONE_1»'));
-    expect(updated.messages[0].content.parts[0]).toBe('Turn 1 prompt');
-    expect(updated.messages[1].content.parts[0]).toBe('Turn 1 assistant answer');
-    expect(updated.messages[2].content.parts[0]).toBe('Turn 3 with «PHONE_1»');
+    expect(extracted).toBeNull();
   });
 
   it('fails closed (returns null) on unexpected or malformed body shapes', () => {

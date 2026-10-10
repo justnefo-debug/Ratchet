@@ -48,38 +48,11 @@ export class ChatGPTAdapter implements SiteAdapter {
       if (!body || typeof body !== 'object' || !Array.isArray(body.messages)) {
         return null;
       }
-
-      // Find the user message (typically the last message or one with author.role === 'user')
-      let userMsgIndex = -1;
-      for (let i = body.messages.length - 1; i >= 0; i--) {
-        const msg = body.messages[i];
-        if (msg?.author?.role === 'user' && msg?.content && Array.isArray(msg.content.parts)) {
-          userMsgIndex = i;
-          break;
-        }
-      }
-
-      if (userMsgIndex === -1) {
-        return null;
-      }
-
-      const targetMsg = body.messages[userMsgIndex];
-      const parts = targetMsg.content.parts;
-      if (!Array.isArray(parts) || parts.length === 0 || typeof parts[0] !== 'string') {
-        return null;
-      }
-
-      const originalPrompt = parts[0];
-
-      return {
-        prompt: originalPrompt,
-        replaceWith: (redactedPrompt: string) => {
-          // Clone and replace only the user prompt part, leaving all IDs, models, and metadata intact
-          const updatedBody = JSON.parse(bodyString);
-          updatedBody.messages[userMsgIndex].content.parts[0] = redactedPrompt;
-          return JSON.stringify(updatedBody);
-        },
-      };
+      // We do not guess the shape of messages[].content.
+      // Since it's not confirmed, we cannot extract the prompt.
+      // This will cause classifyRequest to return 'unknown-message-shape' and fail closed,
+      // which is expected until real-site diagnostics are reviewed.
+      return null;
     } catch {
       return null;
     }

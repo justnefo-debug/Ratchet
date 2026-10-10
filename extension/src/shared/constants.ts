@@ -67,7 +67,7 @@ export const DEFAULT_SETTINGS: RatchetSettings = {
     LOCATION: true,
   },
   powerMode: false,
-  backendUrl: 'http://127.0.0.1:5000',
+  backendUrl: typeof __TEST_BUILD__ !== 'undefined' && __TEST_BUILD__ ? 'http://127.0.0.1:5000' : 'https://api.example.com',
 };
 
 // ─── Storage Keys ────────────────────────────────────────────────

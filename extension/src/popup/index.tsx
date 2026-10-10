@@ -30,7 +30,7 @@ const Popup = () => {
               setCurrentSiteKey('claude');
             } else if (host === 'gemini.google.com') {
               setCurrentSiteKey('gemini');
-            } else if (host === 'localhost' || host === '127.0.0.1') {
+            } else if (typeof __TEST_BUILD__ !== 'undefined' && __TEST_BUILD__ && (host === 'localhost' || host === '127.0.0.1')) {
               setCurrentSiteKey('mock');
             }
           } catch {

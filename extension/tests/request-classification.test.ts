@@ -5,7 +5,7 @@
  * message content shape assumed, not confirmed.
  *
  * Tests:
- * 1. Message request is classified as 'message' and redacted
+ * 1. Message request is classified as 'unknown-message-shape' because shape is unconfirmed
  * 2. A prepare-like request without messages passes through
  * 3. A non-message request containing a fake email is blocked by safety net
  * 4. A message request with an unexpected shape fails closed
@@ -102,25 +102,12 @@ describe('ChatGPT Real-Site Request Classification (A2/A3)', () => {
     is_do_not_remember: false,
   };
 
-  it('classifies a message request as "message" and extracts the prompt', () => {
+  it('classifies a message request as "unknown-message-shape" because shape is unconfirmed', () => {
     const body = JSON.stringify(CHATGPT_MESSAGE_FIXTURE);
     const result = adapter.classifyRequest(body);
 
-    expect(result.classification).toBe('message');
-    expect(result.extracted).not.toBeNull();
-    expect(result.extracted?.prompt).toBe('My email is testuser@example.com, please check it.');
-
-    // Verify redaction preserves all metadata
-    const redacted = result.extracted!.replaceWith('My email is «EMAIL_1», please check it.');
-    const parsed = JSON.parse(redacted);
-    expect(parsed.messages[0].content.parts[0]).toBe('My email is «EMAIL_1», please check it.');
-    expect(parsed.action).toBe('next');
-    expect(parsed.model).toBe('gpt-4o');
-    expect(parsed.timezone).toBe('Asia/Karachi');
-    expect(parsed.timezone_offset_min).toBe(-300);
-    expect(parsed.parent_message_id).toBe('bbb3e5d0-9c23-5e8f-b2d4-ef0567890bcd');
-    expect(parsed.client_contextual_info.is_dark_mode).toBe(false);
-    expect(parsed.supported_encodings).toEqual(['utf-8']);
+    expect(result.classification).toBe('unknown-message-shape');
+    expect(result.extracted).toBeNull();
   });
 
   it('classifies a prepare-like request without messages as "non-message"', () => {

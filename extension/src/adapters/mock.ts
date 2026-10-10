@@ -13,7 +13,7 @@ export class MockSiteAdapter implements SiteAdapter {
     try {
       const parsed = new URL(url);
       const host = parsed.hostname.toLowerCase();
-      return host === 'localhost' || host === '127.0.0.1';
+      return typeof __TEST_BUILD__ !== 'undefined' && __TEST_BUILD__ && (host === 'localhost' || host === '127.0.0.1');
     } catch {
       return false;
     }

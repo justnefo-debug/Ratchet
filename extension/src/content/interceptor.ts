@@ -43,7 +43,7 @@ export class ContentInterceptor {
     if (lower.includes('gemini.google.com')) {
       return sites.gemini !== false;
     }
-    if (lower.includes('localhost') || lower.includes('127.0.0.1')) {
+    if (typeof __TEST_BUILD__ !== 'undefined' && __TEST_BUILD__ && (lower.includes('localhost') || lower.includes('127.0.0.1'))) {
       return sites.mock === true;
     }
     return true;
