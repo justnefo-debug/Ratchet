@@ -996,7 +996,7 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
     // Assert privacy notice displays review timeout block
     const notice = page.locator('#ratchet-privacy-notice');
     await expect(notice).toBeVisible({ timeout: 5000 });
-    expect(await notice.innerText()).toContain('review timed out');
+    expect(await notice.innerText()).toContain('Review timed out');
 
     // Assert fail-closed: NO request was dispatched to the server
     expect(server.loggedRequests.length).toBe(0);
@@ -1165,7 +1165,7 @@ test.describe('Ratchet Privacy Shield E2E Interception & Restoration', () => {
     // 5. Privacy notice is displayed and chat UI remains usable
     const notice = page.locator('#ratchet-privacy-notice');
     await expect(notice).toBeVisible({ timeout: 5000 });
-    expect(await notice.innerText()).toContain('skipped custom rule');
+    expect(await notice.innerText()).toContain('were skipped');
 
     await page.locator('#prompt-textarea').fill('Safe prompt without skipped rules');
     expect(await page.locator('#prompt-textarea').inputValue()).toBe('Safe prompt without skipped rules');

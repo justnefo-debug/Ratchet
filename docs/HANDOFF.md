@@ -11,12 +11,16 @@
 - A4: How-to-read instructions (Instructions exist in Options page UI)
 - Part B: packaging (Added `package.mjs`, `demo.mjs`, `manifest.json` icons, `LICENSE`, `PRIVACY.md`, `DEMO.md`, updated `README.md`)
 - `__TEST_BUILD__` checks added to production unsafe endpoints
+- **U1: Icons**: Generated 16/48/128 px shield icons using playwright script.
+- **U2: Verify Packaging**: Validated `npm run package` zip output and audited `dist/` network primitives (fetch, XHR, etc.). Fixed `PRIVACY.md` to accurately reflect `powerMode` backend url logic.
+- **U3: README Update**: Documented ChatGPT adapter real-site verification status.
+- **U4: Update HANDOFF.md**: Finalized handoff documentation.
 
 ## In Progress
-- Reviewing remaining tasks (if any)
+- Complete! All tasks for submission are done.
 
 ## Next
-- Verify if anything else remains before submission. 
+- Submit the project.
 
 ## Blocked / Needs User
 - None at this time.
