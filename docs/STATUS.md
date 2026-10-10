@@ -11,7 +11,7 @@
 ### 1.1 Network-Level Interception in MAIN-World Script
 - **Mechanism:** Injected script running in the webpage execution context (`MAIN` world) wraps `window.fetch` and `XMLHttpRequest`.
 - **Rationale:** Web-based chat interfaces (ChatGPT, Claude, Gemini) use complex virtualized and rich-text document models (ProseMirror, Lexical, React controlled inputs). Manipulating DOM inputs directly (`value`, `innerText`, `execCommand`) fails to update internal framework state, triggers infinite mutation loops, or risks submitting raw PII over the wire. Intercepting the prompt payload at the network boundary guarantees that only redacted payloads ever leave the browser.
-- **Isolation:** The MAIN-world wrapper communicates with the extension via `window.postMessage` using secure token validation and payload envelopes. Raw PII is redacted before the wire request is dispatched.
+- **Isolation:** The raw request text goes from the MAIN-world wrapper to the ISOLATED script via `window.postMessage`. Page scripts can read that channel (the page already has the typed text), and any token shared with the MAIN world is visible to the page and is not a secret. The boundary actually protects the request leaving the browser over the network, ensuring raw PII is redacted before the wire request is dispatched.
 
 ### 1.2 DOM-Only Restoration in ISOLATED World
 - **Mechanism:** The response restorer operates in the Chrome extension's `ISOLATED` world using a scoped `MutationObserver` and `TreeWalker` to detect placeholder tokens (`«TYPE_N»`) in target message containers. Mappings are queried from the background service worker, and DOM text nodes are updated in place.
@@ -48,7 +48,7 @@
 
 ### 1.6 System Defaults & Configuration Reference
 - **Global Shield:** `enabled = true`
-- **Detection Sensitivity:** `sensitivity = 'medium'` (threshold: 0.65; low = 0.85, high = 0.45)
+- **Detection Sensitivity:** `sensitivity = 'medium'` (Controls gazetteer context strictness and proper noun heuristics. Low = strictest context, lower recall/FPR; High = loose context, captures out-of-vocabulary proper noun sequences)
 - **Supported Sites:** `enabledSites = { chatgpt: true, claude: true }` (Gemini is not supported yet and excluded from matches/permissions)
 - **Review Before Sending:** `reviewBeforeSend = true` (default on for supported sites)
 - **Review Timeout:** `reviewTimeoutSeconds = 60` (fail-closed timeout countdown)
@@ -70,7 +70,7 @@
 | **Stage 3** | Interception, Restoration & Adapters | MAIN-world `fetch`/XHR interceptor with `postMessage` bridge. Site adapters for ChatGPT and Claude completion endpoints. Fail-closed error handling. ISOLATED-world streaming DOM restoration. Test harness with local mock chat server. Sanitized production manifest eliminating localhost permissions. | ✅ Complete |
 | **Stage 4** | Settings, Persistence & ReDoS Security | Options page with custom rules editor, entity category toggles, and sensitivity threshold controls. Client-side ReDoS validator with hard timeout. Optional AES-GCM encrypted persistence in `chrome.storage.local`. Popup UI with live session stats. | ✅ Complete |
 | **Stage 5** | Gazetteer & Context Rule NER | Offline, zero-network Radix-Trie gazetteer detector for names, organizations, and locations. Morphosyntactic context rules and negative filters (code identifiers, file paths). Held-out test evaluation harness and live E2E integration test. | ✅ Complete |
-| **Stage 6** | Review-Before-Send Panel | Closed Shadow DOM overlay (`mode: 'closed'`) in ISOLATED world displaying detected items with category and original -> placeholder. Per-site toggles, timeout countdown with fail-closed cancellation, individual item un-redact, send as-is warning modal, ephemeral session exemption list, keyboard shortcuts (Enter / Esc). 6 dedicated Playwright E2E tests passing (17 total). | ✅ Complete |
+| **Stage 6** | Review-Before-Send Panel | Closed Shadow DOM overlay (`mode: 'closed'`) in ISOLATED world displaying detected items with category and original -> placeholder. Per-site toggles, timeout countdown with fail-closed cancellation, individual item un-redact, send as-is warning modal, ephemeral session exemption list, keyboard shortcuts (Enter / Esc). 20 dedicated Playwright E2E tests passing. | ✅ Complete |
 
 ---
 
@@ -109,14 +109,15 @@
    - Inputs are scanned in overlapping chunks (`SCAN_CHUNK_SIZE = 10000`, `SCAN_CHUNK_OVERLAP = 1000`), guaranteeing that matches up to 1,000 characters spanning chunk boundaries are captured without memory spikes.
    - Tested and verified on 50,000-character prompts with matches at the very end and spanning chunk boundaries.
 4. **Memory Profiling Audit & Process Breakdown (Fix 4 - Completed):**
-   - Clarified that the 4.46 MB figure measured by CDP `Performance.getMetrics` originates from the active web page tab context (the renderer process hosting the chat DOM and injected content script), not the extension's service worker.
+   - V8 JS Heap (measured via CDP `Performance.getMetrics`): ~4.48 MB maximum in the active web page tab context (renderer process), and ~1.5 - 2.5 MB in the extension's background service worker. The "5 MB" figure refers to JS heap memory only.
+   - Working Set (measured via OS Task Manager / Process memory): The background service worker consumes approximately 35 to 50 MB of total private OS memory.
    - True process-isolated memory measurements:
 
 | Process Context | Measured JS Heap | Working Set (Private OS Memory) | Role / Lifecycle |
 | :--- | :---: | :---: | :--- |
 | **Web Page Tab (Renderer Process)** | ~1.4 – 1.7 MB (idle page) to ~4.48 MB (heavy conversation) | ~80 – 120 MB | Hosts target chat DOM, user interactions, injected content script, and closed Shadow DOM review overlay. |
 | **Extension Background Service Worker** | ~1.5 – 2.5 MB (post-NER load, 526.5 KB compiled Trie) | ~35 – 50 MB | Coordinates detection, manages conversation mappings in `chrome.storage.session`, terminates when idle. |
-| **Total Extension Overhead** | < 5.0 MB V8 Heap | Well within 50 MB budget | Fully browser-native MV3; zero background daemon or Python runtime. |
+| **Total Extension Overhead** | < 5.0 MB V8 Heap | Up to ~50 MB | Fully browser-native MV3; zero background daemon or Python runtime. |
 
 ---
 
@@ -124,9 +125,10 @@
 
 ### 4.1 Security & Isolation Architecture
 - **Closed Shadow DOM Overlay:** Created directly on `document.documentElement` by the `ISOLATED` world script using `host.attachShadow({ mode: 'closed' })`. Page scripts querying `host.shadowRoot` receive strictly `null`, and `host.innerText` / `host.innerHTML` are empty.
-- **Zero Raw PII Exposure:**
+- **Zero Raw PII Exposure (Outside the Browser):**
   - Raw PII is never emitted to console logs.
-  - Raw PII is never emitted over `window.postMessage` between `RATCHET_MAIN` and `RATCHET_ISOLATED`. Only the final transformed text destined for the wire is returned.
+  - The raw request text is sent over `window.postMessage` from `RATCHET_MAIN` to `RATCHET_ISOLATED` for redaction. Page scripts can read this channel, but they already possess the typed text.
+  - The returned response over `window.postMessage` to `RATCHET_MAIN` contains only the final transformed text destined for the wire.
   - Page-level DOM nodes outside the closed shadow DOM never contain extension-injected PII.
 - **Fail-Closed Network Wrapper:** The MAIN-world interceptor wraps `fetch` and `XMLHttpRequest`, holding outgoing requests in flight until user decision. On cancel or timeout, the request is cleanly aborted and rejected with no bytes transmitted over the wire.
 - **Chat UI Preservation:** Canceling or timing out displays an alert notice and leaves the chat UI input box intact and interactive, allowing the user to edit or retry without page refresh.
