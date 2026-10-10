@@ -55,6 +55,34 @@ export class ContentInterceptor {
         return;
       }
 
+      if (evt.data.type === 'DIAGNOSTIC_LOG') {
+        try {
+          chrome.runtime.sendMessage({
+            action: 'diagnosticLog',
+            payload: evt.data.payload
+          });
+        } catch {}
+        return;
+      }
+
+      if (evt.data.type === 'GET_SENSITIVE_TERMS') {
+        // Fetch sensitive terms from settings and relay back to MAIN world
+        try {
+          chrome.runtime.sendMessage({ action: 'getSettings' }, (resp) => {
+            const terms = resp?.data?.sensitiveTerms || [];
+            const termStrings = terms
+              .filter((t: any) => t.enabled && t.term)
+              .map((t: any) => t.term);
+            window.postMessage({
+              source: 'RATCHET_ISOLATED',
+              type: 'SENSITIVE_TERMS_RESPONSE',
+              terms: termStrings,
+            }, '*');
+          });
+        } catch {}
+        return;
+      }
+
       if (evt.data.type === 'REDACT_REQUEST') {
         const { requestId, text, conversationId } = evt.data;
 

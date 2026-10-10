@@ -101,7 +101,7 @@ export const RedactTab: React.FC<RedactTabProps> = ({
           type="file" 
           ref={fileInputRef} 
           style={{ display: 'none' }} 
-          accept=".pdf,.docx,.xlsx,.xls"
+          accept=".pdf,.docx,.xlsx,.xls,.csv,.txt"
           onChange={(e) => {
             if (e.target.files && e.target.files[0]) {
               onFileUpload(e.target.files[0]);

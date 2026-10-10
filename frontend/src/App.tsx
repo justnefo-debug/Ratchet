@@ -340,7 +340,9 @@ export const App: React.FC = () => {
       document.body.appendChild(a);
       a.click();
       a.remove();
-      window.URL.revokeObjectURL(url);
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 60000);
       
       // Save the document session to the vault
       const docSession: SessionRecord = {

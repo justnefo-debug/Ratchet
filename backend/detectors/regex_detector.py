@@ -6,7 +6,7 @@ class RegexDetector:
     # We pre-compile patterns for performance
     PATTERNS = {
         "EMAIL": (re.compile(r"\b[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+\b"), 0.95),
-        "PHONE": (re.compile(r"\b(\+?\d{1,3}[\s-]?)?\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{4}\b"), 0.90),
+        "PHONE": (re.compile(r"\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3,4}\)?[-.\s]?\d{3,4}(?:[-.\s]?\d{3,4})?\b"), 0.90),
         "CNIC": (re.compile(r"\b\d{5}-\d{7}-\d\b"), 0.99),
         "API_KEY": (re.compile(r"\b(?:sk-[a-zA-Z0-9_-]{12,64}|AKIA[0-9A-Z]{16}|ghp_[a-zA-Z0-9]{36})\b"), 0.99),
         "PERSON": (re.compile(r"\b[A-Z]\.[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?\b"), 0.95),

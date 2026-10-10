@@ -37,7 +37,8 @@ def redact():
         return jsonify({"error": "text field is required"}), 400
         
     session_id = data.get("session_id")
-    redacted_text, entities, sid = engine.process_redact(data["text"], session_id)
+    custom_rules = data.get("custom_rules", [])
+    redacted_text, entities, sid = engine.process_redact(data["text"], session_id, custom_rules)
     
     return jsonify({
         "redacted_text": redacted_text,

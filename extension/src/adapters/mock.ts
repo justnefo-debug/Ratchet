@@ -4,7 +4,7 @@
  * Used for automated E2E and local round-trip testing.
  */
 
-import type { SiteAdapter, ExtractedPrompt } from './types';
+import type { SiteAdapter, ExtractedPrompt, RequestClassification } from './types';
 
 export class MockSiteAdapter implements SiteAdapter {
   siteName = 'MockChat';
@@ -75,6 +75,20 @@ export class MockSiteAdapter implements SiteAdapter {
     } catch {
       return null;
     }
+  }
+
+  classifyRequest(bodyString: string): { classification: RequestClassification; extracted: ExtractedPrompt | null } {
+    const extracted = this.extractUserPrompt(bodyString);
+    if (extracted) {
+      return { classification: 'message', extracted };
+    }
+    try {
+      const body = JSON.parse(bodyString);
+      if (body && typeof body === 'object' && ('prompt' in body || 'message' in body)) {
+        return { classification: 'unknown-message-shape', extracted: null };
+      }
+    } catch {}
+    return { classification: 'non-message', extracted: null };
   }
 
   getMessageSelectors(): string[] {

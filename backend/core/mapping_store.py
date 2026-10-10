@@ -31,6 +31,13 @@ class MappingStore:
             self.sessions[session_id]['mapping'][placeholder] = encrypted_val
             
     def get_mapping(self, session_id: str) -> Dict[str, str]:
+        if session_id == 'latest':
+            valid_sessions = {sid: data for sid, data in self.sessions.items() if len(data['mapping']) > 0}
+            if not valid_sessions:
+                return {}
+            # Return the session with the most recent created_at
+            session_id = max(valid_sessions.items(), key=lambda x: x[1]['created_at'])[0]
+
         if session_id not in self.sessions:
             return {}
             

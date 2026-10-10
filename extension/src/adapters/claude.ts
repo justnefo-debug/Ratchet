@@ -5,7 +5,7 @@
  * Intercepts POST requests to /api/organizations/.../chat_conversations/...
  */
 
-import type { SiteAdapter, ExtractedPrompt } from './types';
+import type { SiteAdapter, ExtractedPrompt, RequestClassification } from './types';
 
 export class ClaudeAdapter implements SiteAdapter {
   siteName = 'Claude';
@@ -111,6 +111,34 @@ export class ClaudeAdapter implements SiteAdapter {
       return null;
     } catch {
       return null;
+    }
+  }
+
+  classifyRequest(bodyString: string): { classification: RequestClassification; extracted: ExtractedPrompt | null } {
+    try {
+      const body = JSON.parse(bodyString);
+      if (!body || typeof body !== 'object') {
+        return { classification: 'non-message', extracted: null };
+      }
+
+      // Claude has two schemas: 'prompt' string or 'messages' array
+      if ('prompt' in body || 'messages' in body) {
+        if ('messages' in body && !Array.isArray(body.messages)) {
+          return { classification: 'unknown-message-shape', extracted: null };
+        }
+
+        const extracted = this.extractUserPrompt(bodyString);
+        if (extracted) {
+          return { classification: 'message', extracted };
+        }
+
+        // Has prompt/messages but couldn't extract → fail closed
+        return { classification: 'unknown-message-shape', extracted: null };
+      }
+
+      return { classification: 'non-message', extracted: null };
+    } catch {
+      return { classification: 'non-message', extracted: null };
     }
   }
 

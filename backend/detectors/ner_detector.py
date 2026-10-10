@@ -13,15 +13,18 @@ class NERDetector:
         if not self.nlp:
             return []
         
-        doc = self.nlp(text)
+        # Replace commas with periods for better tabular NER parsing (maintains string length)
+        doc = self.nlp(text.replace(',', '.').replace('\n', '.'))
         entities = []
         for ent in doc.ents:
             if ent.label_ in ["PERSON", "ORG", "GPE", "LOC", "DATE", "MONEY", "NORP"]:
                 if ent.label_ == "ORG" and ent.text.upper() in ["API", "CNIC", "SSN"]:
                     continue
+                if ent.label_ == "PERSON" and ent.text.upper() in ["EMAIL", "NAME", "PHONE", "ADDRESS", "MESSAGE", "ROLE"]:
+                    continue
                 entities.append(Entity(
                     type=ent.label_,
-                    value=ent.text,
+                    value=text[ent.start_char:ent.end_char],
                     start=ent.start_char,
                     end=ent.end_char,
                     confidence=0.85

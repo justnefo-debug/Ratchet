@@ -132,12 +132,12 @@ export function detectEntitiesInText(
   // 5. Phone numbers
   if (enabledTypes['Phone']) {
     // International format (+92 300 1234567, +1-555-123-4567, 0300-1234567)
-    const phoneRegex = /(?:\+?\d{1,3}[-.\s]?)?\(?\d{3,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}\b/g;
+    const phoneRegex = /(?:\+?\d{1,3}[-.\s]?)?\(?\d{3,4}\)?[-.\s]?\d{3,4}(?:[-.\s]?\d{3,4})?\b/g;
     let match: RegExpExecArray | null;
     while ((match = phoneRegex.exec(text)) !== null) {
       // Ignore if it's pure digits under 10 or looks like a CNIC
       const digitsOnly = match[0].replace(/\D/g, '');
-      if (digitsOnly.length >= 10 && digitsOnly.length <= 15) {
+      if (digitsOnly.length >= 7 && digitsOnly.length <= 15) {
         rawMatches.push({
           type: 'Phone',
           value: match[0],

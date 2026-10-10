@@ -132,6 +132,41 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       .catch((err) => sendResponse({ success: false, error: err.toString() }));
     return true;
   }
+
+  if (request.action === 'diagnosticLog') {
+    // Store in chrome.storage.session (last 20 entries, content-free)
+    const MAX_DIAGNOSTIC_ENTRIES = 20;
+    if (chrome?.storage?.session) {
+      chrome.storage.session.get(['ratchet_diagnostics'], (result) => {
+        const entries: any[] = result.ratchet_diagnostics || [];
+        entries.push(request.payload);
+        // Keep only last 20
+        const trimmed = entries.slice(-MAX_DIAGNOSTIC_ENTRIES);
+        chrome.storage.session.set({ ratchet_diagnostics: trimmed });
+      });
+    }
+    sendResponse({ success: true });
+    return true;
+  }
+
+  if (request.action === 'getDiagnostics') {
+    if (chrome?.storage?.session) {
+      chrome.storage.session.get(['ratchet_diagnostics'], (result) => {
+        sendResponse({ success: true, data: result.ratchet_diagnostics || [] });
+      });
+    } else {
+      sendResponse({ success: true, data: [] });
+    }
+    return true;
+  }
+
+  if (request.action === 'clearDiagnostics') {
+    if (chrome?.storage?.session) {
+      chrome.storage.session.set({ ratchet_diagnostics: [] });
+    }
+    sendResponse({ success: true });
+    return true;
+  }
   });
 }
 

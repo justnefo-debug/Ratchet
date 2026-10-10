@@ -5,7 +5,7 @@
  * Intercepts POST /backend-api/conversation.
  */
 
-import type { SiteAdapter, ExtractedPrompt } from './types';
+import type { SiteAdapter, ExtractedPrompt, RequestClassification } from './types';
 
 export class ChatGPTAdapter implements SiteAdapter {
   siteName = 'ChatGPT';
@@ -82,6 +82,38 @@ export class ChatGPTAdapter implements SiteAdapter {
       };
     } catch {
       return null;
+    }
+  }
+
+  classifyRequest(bodyString: string): { classification: RequestClassification; extracted: ExtractedPrompt | null } {
+    try {
+      const body = JSON.parse(bodyString);
+      if (!body || typeof body !== 'object') {
+        return { classification: 'non-message', extracted: null };
+      }
+
+      // If the body has a 'messages' key, it looks like a message request
+      if ('messages' in body) {
+        if (!Array.isArray(body.messages)) {
+          // messages exists but is not an array → unexpected shape, fail closed
+          return { classification: 'unknown-message-shape', extracted: null };
+        }
+
+        // Try to extract the user prompt
+        const extracted = this.extractUserPrompt(bodyString);
+        if (extracted) {
+          return { classification: 'message', extracted };
+        }
+
+        // messages array exists but we couldn't extract a valid user message → fail closed
+        return { classification: 'unknown-message-shape', extracted: null };
+      }
+
+      // No messages key → non-message request (e.g., prepare, metadata)
+      return { classification: 'non-message', extracted: null };
+    } catch {
+      // Invalid JSON → treat as non-message (safety net will scan raw string)
+      return { classification: 'non-message', extracted: null };
     }
   }
 

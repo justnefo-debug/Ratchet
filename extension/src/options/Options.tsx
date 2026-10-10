@@ -38,6 +38,10 @@ const Options: React.FC = () => {
   const [newTermText, setNewTermText] = useState('');
   const [newTermCategory, setNewTermCategory] = useState<SensitiveTermCategory>('PERSON');
 
+  // Diagnostics state
+  const [diagnosticEntries, setDiagnosticEntries] = useState<any[]>([]);
+  const [diagnosticCopyStatus, setDiagnosticCopyStatus] = useState('');
+
   const handleAddSensitiveTerm = () => {
     const trimmed = newTermText.trim();
     if (!trimmed) return;
@@ -196,6 +200,40 @@ const Options: React.FC = () => {
       setTimeout(() => setClearStatus(''), 3000);
     }
   };
+
+  const handleLoadDiagnostics = () => {
+    if (chrome?.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({ action: 'getDiagnostics' }, (res) => {
+        if (res?.success && Array.isArray(res.data)) {
+          setDiagnosticEntries(res.data);
+        }
+      });
+    }
+  };
+
+  const handleClearDiagnostics = () => {
+    if (chrome?.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({ action: 'clearDiagnostics' }, () => {
+        setDiagnosticEntries([]);
+      });
+    }
+  };
+
+  const handleCopyDiagnostics = () => {
+    const text = JSON.stringify(diagnosticEntries, null, 2);
+    navigator.clipboard.writeText(text).then(() => {
+      setDiagnosticCopyStatus('Copied!');
+      setTimeout(() => setDiagnosticCopyStatus(''), 3000);
+    }).catch(() => {
+      setDiagnosticCopyStatus('Copy failed');
+      setTimeout(() => setDiagnosticCopyStatus(''), 3000);
+    });
+  };
+
+  // Load diagnostics on mount
+  useEffect(() => {
+    handleLoadDiagnostics();
+  }, []);
 
   return (
     <div className="options-container">
@@ -696,6 +734,144 @@ const Options: React.FC = () => {
           <div className="threat-model-box">
             <strong>Threat Model Notice:</strong> A non-extractable WebCrypto key prevents JavaScript from exporting the raw key material and protects mappings from casual inspection or plain-text storage dumps. However, because the key (IndexedDB) and encrypted data (chrome.storage.local) reside in the same browser profile directory, this <strong>does not protect against anyone with access to your browser profile folder or local disk</strong>, nor against in-memory malware while Chrome is running.
           </div>
+        </section>
+
+        {/* Diagnostics Section */}
+        <section className="settings-section" id="diagnostics-section">
+          <h2>🔍 Diagnostics</h2>
+          <p className="help-text" style={{ marginBottom: '12px' }}>
+            Last 20 content-free request summaries. No raw prompt text is ever stored here.
+            Use this to debug which requests are being redacted, passed through, or blocked.
+          </p>
+
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+            <button
+              id="diagnostics-refresh-btn"
+              type="button"
+              className="secondary-btn"
+              onClick={handleLoadDiagnostics}
+            >
+              Refresh
+            </button>
+            <button
+              id="diagnostics-copy-btn"
+              type="button"
+              className="secondary-btn"
+              onClick={handleCopyDiagnostics}
+            >
+              Copy
+            </button>
+            <button
+              id="diagnostics-clear-btn"
+              type="button"
+              className="danger-btn"
+              onClick={handleClearDiagnostics}
+            >
+              Clear
+            </button>
+            {diagnosticCopyStatus && (
+              <span style={{ color: '#10b981', fontSize: '13px', alignSelf: 'center' }}>
+                ✓ {diagnosticCopyStatus}
+              </span>
+            )}
+          </div>
+
+          {diagnosticEntries.length === 0 ? (
+            <p style={{ color: '#9ca3af', fontSize: '13px', fontStyle: 'italic' }}>
+              No diagnostic entries yet. Send a message on a supported site to see entries.
+            </p>
+          ) : (
+            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              <table id="diagnostics-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #374151', textAlign: 'left' }}>
+                    <th style={{ padding: '6px 8px', color: '#9ca3af' }}>Time</th>
+                    <th style={{ padding: '6px 8px', color: '#9ca3af' }}>Method</th>
+                    <th style={{ padding: '6px 8px', color: '#9ca3af' }}>Path</th>
+                    <th style={{ padding: '6px 8px', color: '#9ca3af' }}>Type</th>
+                    <th style={{ padding: '6px 8px', color: '#9ca3af' }}>Classification</th>
+                    <th style={{ padding: '6px 8px', color: '#9ca3af' }}>Decision</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {diagnosticEntries.map((entry, idx) => (
+                    <tr
+                      key={idx}
+                      style={{
+                        borderBottom: '1px solid #1f2937',
+                        backgroundColor: entry.decision === 'blocked' ? 'rgba(239,68,68,0.1)' :
+                          entry.decision === 'redacted' ? 'rgba(59,130,246,0.1)' : 'transparent',
+                      }}
+                    >
+                      <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>
+                        {entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : '—'}
+                      </td>
+                      <td style={{ padding: '6px 8px' }}>{entry.method || '—'}</td>
+                      <td style={{ padding: '6px 8px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        title={entry.path}
+                      >
+                        {entry.path || '—'}
+                      </td>
+                      <td style={{ padding: '6px 8px' }}>{entry.contentType || '—'}</td>
+                      <td style={{ padding: '6px 8px' }}>
+                        <span style={{
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          backgroundColor: entry.classification === 'message' ? '#1e3a5f' :
+                            entry.classification === 'non-message' ? '#1a3a2a' : '#5f1e1e',
+                          color: entry.classification === 'message' ? '#93c5fd' :
+                            entry.classification === 'non-message' ? '#6ee7b7' : '#fca5a5',
+                        }}>
+                          {entry.classification || '—'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '6px 8px' }}>
+                        <span style={{
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          backgroundColor: entry.decision === 'redacted' ? '#1e3a5f' :
+                            entry.decision === 'passed-through' ? '#1a3a2a' : '#5f1e1e',
+                          color: entry.decision === 'redacted' ? '#93c5fd' :
+                            entry.decision === 'passed-through' ? '#6ee7b7' : '#fca5a5',
+                        }}>
+                          {entry.decision || '—'}
+                        </span>
+                        {entry.blockReason && (
+                          <div style={{ fontSize: '10px', color: '#f87171', marginTop: '2px' }}>
+                            {entry.blockReason}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {diagnosticEntries.length > 0 && (
+            <details style={{ marginTop: '12px' }}>
+              <summary style={{ cursor: 'pointer', color: '#9ca3af', fontSize: '12px' }}>
+                Raw JSON structure of last entry
+              </summary>
+              <pre style={{
+                background: '#111827',
+                padding: '12px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                color: '#d1d5db',
+                overflow: 'auto',
+                maxHeight: '300px',
+                marginTop: '8px',
+              }}>
+                {JSON.stringify(diagnosticEntries[diagnosticEntries.length - 1]?.jsonStructure, null, 2)}
+              </pre>
+            </details>
+          )}
         </section>
 
         {/* Clear Mappings & Privacy Notice */}

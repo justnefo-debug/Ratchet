@@ -49,7 +49,7 @@ export async function performRedaction(
     const res = await fetch(`${API_BASE_URL}/redact`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, session_id: currentSessionId }),
+      body: JSON.stringify({ text, session_id: currentSessionId, custom_rules: customRules }),
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
